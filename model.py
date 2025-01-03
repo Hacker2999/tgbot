@@ -1,4 +1,3 @@
-import psycopg2
 from peewee import *
 from config import DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
 
