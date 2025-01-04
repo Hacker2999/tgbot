@@ -4,7 +4,6 @@ from config import DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
 db = PostgresqlDatabase(database=DB_NAME, user=DB_USER, password=DB_PASSWORD, host=DB_HOST, port=DB_PORT)
 
 class BaseModel(Model):
-    """A base model that will use our Postgresql database"""
     class Meta:
         database = db
 
@@ -37,3 +36,12 @@ class TextModel(BaseModel):
 
     class Meta:
         table_name = 'text'
+
+class AnekModel(BaseModel):
+    id = BigAutoField(primary_key=True)
+    created_at = TimestampField(constraints=[SQL('DEFAULT now()')])
+    user_id = BigIntegerField(null=False,unique=True)
+    count = BigIntegerField(default=0)
+
+    class Meta:
+        table_name = 'anek_list'

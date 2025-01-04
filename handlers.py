@@ -1,6 +1,9 @@
+from datetime import datetime
 from enum import member
 from html.entities import html5
+from itertools import count
 from types import NoneType
+from venv import create
 
 from aiogram import Router, Bot
 from aiogram.loggers import event
@@ -14,7 +17,7 @@ from aiogram.utils.formatting import sizeof
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from baneks_api import fetch_random_joke
-from model import TextModel, BotStatus
+from model import TextModel, BotStatus, AnekModel
 
 builder = InlineKeyboardBuilder()
 router = Router()
@@ -127,9 +130,32 @@ async def measure_size(message: Message):
 
 @router.message(Command("anekdot"))
 async def i_want_anekdot(message: Message):
-    try:
-        anekdot = await fetch_random_joke()
-        await message.reply(anekdot,parse_mode="markdown")
-    except Exception as e:
-        print(e)
-        await message.reply(f"Анекдота не будет")
+    userId = message.from_user.id
+    q2 =(AnekModel.select(AnekModel.count)
+        .where(AnekModel.user_id == userId)
+        .first()
+    )
+    count_qu = q2.count
+    print(count_qu)
+    if count_qu < 3:
+        try:
+            anekdot = await fetch_random_joke()
+            q = (AnekModel
+            .insert({
+                AnekModel.created_at: fn.now(),  # Используем SQL-функцию now()
+                AnekModel.user_id: userId,
+                AnekModel.count: 1
+            })
+            .on_conflict(
+                conflict_target=[AnekModel.user_id],
+                preserve=[AnekModel.created_at],
+                update={AnekModel.count: AnekModel.count + 1}
+            ))
+            q.execute()
+            await message.reply(anekdot,parse_mode="markdown")
+        except Exception as e:
+            print(e)
+            print(datetime.now().date())
+            await message.reply(f"Анекдота не будет")
+    else:
+        await message.reply(f"Анекдота не будет. Превышен лимит на день!")
