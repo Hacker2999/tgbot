@@ -1,25 +1,25 @@
 from datetime import datetime
-from enum import member
-from html.entities import html5
-from itertools import count
-from types import NoneType
-from venv import create
 
 from aiogram import Router, Bot
+from aiogram.enums import ChatAction
 from aiogram.loggers import event
-from aiogram.methods import GetMyDefaultAdministratorRights
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberUpdated
+from aiogram.methods import PinChatMessage
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberUpdated, BotCommand, \
+    MenuButtonCommands, ChatPhoto
 from aiogram.filters import Command, ChatMemberUpdatedFilter, IS_ADMIN, MEMBER
-from aiogram.filters import IS_MEMBER, IS_NOT_MEMBER
+from aiogram.filters import IS_MEMBER, IS_NOT_MEMBER, Command
 import random
+
+from magic_filter import MagicFilter
 from peewee import *
 from aiogram.utils.formatting import sizeof
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from pyexpat.errors import messages
 
 from baneks_api import fetch_random_joke
-from model import TextModel, BotStatus, AnekModel
+from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel
+from utils import quota_check
 
-builder = InlineKeyboardBuilder()
 router = Router()
 
 LINKS = [
@@ -27,16 +27,44 @@ LINKS = [
     ("Бесполезная ссылка", "https://example.org"),
 ]
 
+admin_commands = [
+        BotCommand(command="stat",description="Вывод статистики пользователя"),
+        BotCommand(command="set_welcome",description="Изменить приветственное сообщение"),
+        BotCommand(command="set_bye",description="Изменить прощальное сообщение"),
+        BotCommand(command="rules",description="Правила"),
+        BotCommand(command="size",description="Команда по измерению своего бубуя"),
+        BotCommand(command="links",description="Полезные ссылки"),
+        BotCommand(command="anekdot",description="Внимание,анекдот"),
+]
+admin_menu_button = MenuButtonCommands(commands=admin_commands)
 
-@router.chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
-async def handle_member_join(event: ChatMemberUpdated, bot: Bot):
+user_commands = [
+        BotCommand(command="stat",description="Вывод статистики пользователя"),
+        BotCommand(command="rules",description="Правила"),
+        BotCommand(command="size",description="Команда по измерению своего бубуя"),
+        BotCommand(command="links",description="Полезные ссылки"),
+        BotCommand(command="anekdot",description="Внимание,анекдот"),
+]
+
+
+
+@router.my_chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
+async def handle_member_join(event: ChatMemberUpdated,bot: Bot):
     if event.new_chat_member:
         if event.new_chat_member.user.id == bot.id:
+            q = (Chat_listModel.insert({
+                Chat_listModel.created_at: fn.now(),
+                Chat_listModel.chat_id: event.chat.id
+            })
+            .on_conflict(
+                conflict_target=[Chat_listModel.chat_id],
+                update={User_listModel.created_at: fn.now()}
+            )
+            )
+            q.execute()
             await bot.send_message(
                 chat_id=event.chat.id,
-                text=f"Вы добавили отвального бота себе в чат\n"
-                     f"Для начала выдайте боту права администратора\n"
-                     f"После этого введите команду /welcome для знакомства со мной")
+                text=f"Вы добавили отвального бота себе в чат")
 
         else:
             q = (TextModel
@@ -45,6 +73,17 @@ async def handle_member_join(event: ChatMemberUpdated, bot: Bot):
                  .first()
                  )
             WELCOME_MESSAGE = q.text_of
+            q2 = (User_listModel
+            .insert({
+                User_listModel.created_at: fn.now(),
+                User_listModel.user_id: event.from_user.id,
+            })
+            .on_conflict(
+                conflict_target=[User_listModel.user_id],
+                update={User_listModel.created_at: fn.now()}
+            )
+            )
+            q2.execute()
 
             await bot.send_message(
                 chat_id=event.chat.id,
@@ -60,14 +99,75 @@ async def handle_member_leave(event: ChatMemberUpdated, bot: Bot):
          )
 
     GOODBYE_MESSAGE = q.text_of
+    try:
+        q2 = (User_listModel
+              .select(User_listModel.created_at, User_listModel.message_count)
+              .where(User_listModel.user_id == event.from_user.id)
+              .first()
+              )
+        time_withus = datetime.astimezone(datetime.now()) - q2.created_at
+        days = time_withus.days
+        hours = time_withus.seconds // 3600
+        minutes = (time_withus.seconds % 3600) // 60
+        await bot.send_message(
+            chat_id=event.chat.id,
+            text=f"{GOODBYE_MESSAGE}, {event.from_user.first_name}!\n"
+                 f"Кол-во сообщений: {q2.message_count}\n"
+                 f"Был с нами: \n"
+                 f"Дней: {days}\n"
+                 f"Часов: {hours}\n"
+                 f"Минут: {minutes}\n"
+        )
+    except Exception as e:
+        print(e)
+        await bot.send_message(
+            chat_id=event.chat.id,
+            text=f"{GOODBYE_MESSAGE}, {event.from_user.first_name}!\n"
+                 f"Легенды не вмирают"
+        )
 
-    await bot.send_message(
-        chat_id=event.chat.id,
-        text=f"{GOODBYE_MESSAGE}, {event.from_user.first_name}!"
-    )
+# @router.channel_post(ChatAction)
+# async def pinn_channel_message(message: Message, bot: Bot):
+#     try:
+#         await bot.unpin_all_chat_messages(message.chat.id)
+#         await bot.pin_chat_message(message.chat.id, message.id)
+#         print(message.chat.id)
+#     except Exception as e:
+#         print(e)
 
 
-@router.message(Command("set_welcome"))
+@router.message(Command(BotCommand(command="stat", description="Вывод статистики пользователя")))
+async def stat(message: Message, bot: Bot):
+    try:
+        q = (User_listModel
+             .select(User_listModel.created_at, User_listModel.message_count)
+             .where(User_listModel.user_id == message.from_user.id)
+             .first()
+             )
+        time_withus = datetime.astimezone(datetime.now()) - q.created_at
+        days = time_withus.days
+        hours = time_withus.seconds // 3600
+        minutes = (time_withus.seconds % 3600) // 60
+        await bot.send_message(
+            chat_id=message.chat.id,
+            text=f"Статистика, {message.from_user.first_name}'a:\n"
+                 f"Кол-во сообщений: {q.message_count}\n"
+                 f"C нами уже: \n"
+                 f"Дней: {days}\n"
+                 f"Часов: {hours}\n"
+                 f"Минут: {minutes}\n"
+
+        )
+    except Exception as e:
+        print(e)
+        await bot.send_message(
+            chat_id=message.chat.id,
+            text=f"Вы древний мудрый дуб, живите теперь с этим...\n"
+        )
+    print(message.chat.type)
+
+
+@router.message(Command(BotCommand(command="set_welcome", description="Изменить приветственное сообщение")))
 async def set_welcome(message: Message):
     if message.reply_to_message and message.reply_to_message.text:
         WELCOME_MESSAGE = message.reply_to_message.text
@@ -87,7 +187,7 @@ async def set_welcome(message: Message):
         await message.reply("Приветствие не обновлено!")
 
 
-@router.message(Command("set_bye"))
+@router.message(Command(BotCommand(command="set_bye", description="Изменить прощальное сообщение")))
 async def set_bye(message: Message):
     if message.reply_to_message and message.reply_to_message.text:
         GOODBYE_MESSAGE = message.reply_to_message.text
@@ -106,38 +206,99 @@ async def set_bye(message: Message):
     except Exception as e:
         await message.reply("Прощание не обновлено!")
 
+@router.message(Command(BotCommand(command="add_button", description="Добавить кнопку в ссылках")))
+async def add_button(message: Message):
+    try:
+        text = message.text.removeprefix('/add_button ').strip()
+        parts = text.split('" "')
 
-@router.message(Command("rules"))
+        # Убираем кавычки
+        button_name = parts[0].strip('"')
+        link = parts[1].strip('"')
+
+        print(f"Название кнопки: {button_name}")
+        print(f"Ссылка: {link}")
+        q = (Button_listModel
+        .insert({
+            Button_listModel.button_name: button_name,
+            Button_listModel.button_link: link,
+        })
+        .on_conflict(
+            conflict_target=[Button_listModel.button_link],
+            update={
+                Button_listModel.button_name: button_name,
+                Button_listModel.button_link: link,
+            }
+        )
+        )
+        q.execute()
+        await message.reply(f"Добавлена кнопка: {button_name}")
+    except Exception as e:
+        print(e)
+
+@router.message(Command(BotCommand(command="del_button", description="Удалить кнопку в ссылках")))
+async def del_button(message: Message):
+    try:
+        text = message.text.removeprefix('/del_button ').strip()
+
+        q = (Button_listModel.delete().where(Button_listModel.button_name == text))
+        q.execute()
+        await message.reply(f"Удалена кнопка: {text}")
+    except Exception as e:
+        print(e)
+
+
+
+@router.message(Command(BotCommand(command="rules",description="Правила")))
 async def send_rules(message: Message):
-    await message.reply(RULES)
+    q = (TextModel
+         .select(TextModel.text_of)
+         .where(TextModel.target == "rules")
+         .first()
+         )
+    await message.reply(q.text_of)
 
 
-@router.message(Command("links"))
+@router.message(Command(BotCommand(command="links", description="Полезные ссылки")))
 async def send_links(message: Message):
-    builder.adjust(len(LINKS))
-    for text, url in LINKS:
-        builder.button(text=text, url=url)
+    query = Button_listModel.select()
+    builder = InlineKeyboardBuilder()
+    result = [
+        {
+            "button_name": record.button_name,
+            "button_link": record.button_link,
+        }
+        for record in query
+    ]
+    link_list = result
+    builder.adjust(len(link_list))
+    for record in link_list:
+        button_name = record["button_name"]
+        button_link = record["button_link"]
+        builder.button(text=button_name, url=button_link)
     await message.reply("Ссылки:", reply_markup=builder.as_markup())
 
 
-@router.message(Command("size"))
+@router.message(Command(BotCommand(command="size", description="Команда по измерению своего бубуя")))
 async def measure_size(message: Message):
+    print(message.chat.id)
     username = message.from_user.first_name or message.from_user.username
     with open("xyz.txt", "r", encoding="utf-8") as file:
         lines = [line.strip() for line in file]
     size = random.randint(-1, 50)
     await message.reply(f"{random.choice(lines)} у {username}'a: {size} см")
 
-@router.message(Command("anekdot"))
+
+@router.message(Command(BotCommand(command="anekdot", description="Внимание, АНЕКДОТ!!!")))
 async def i_want_anekdot(message: Message):
     userId = message.from_user.id
-    q2 =(AnekModel.select(AnekModel.count)
-        .where(AnekModel.user_id == userId)
-        .first()
-    )
+    q2 = (AnekModel.select(AnekModel.count)
+          .where(AnekModel.user_id == userId)
+          .first()
+          )
     count_qu = q2.count
-    print(count_qu)
-    if count_qu < 3:
+
+    if quota_check(userId, count_qu):
         try:
             anekdot = await fetch_random_joke()
             q = (AnekModel
@@ -152,10 +313,28 @@ async def i_want_anekdot(message: Message):
                 update={AnekModel.count: AnekModel.count + 1}
             ))
             q.execute()
-            await message.reply(anekdot,parse_mode="markdown")
+            await message.reply(anekdot, parse_mode="markdown")
         except Exception as e:
             print(e)
             print(datetime.now().date())
-            await message.reply(f"Анекдота не будет")
+            await message.reply(f"Анекдота не будет. Системная ошибка, обратитесь к отвальному создателю")
     else:
         await message.reply(f"Анекдота не будет. Превышен лимит на день!")
+
+
+@router.message()
+async def messages_counter(message: Message):
+    try:
+        q = (User_listModel
+        .insert({
+            User_listModel.created_at: fn.now(),
+            User_listModel.user_id: message.from_user.id,
+        })
+        .on_conflict(
+            conflict_target=[User_listModel.user_id],
+            update={User_listModel.message_count: User_listModel.message_count + 1}
+        )
+        )
+        q.execute()
+    except Exception as e:
+        print(e)

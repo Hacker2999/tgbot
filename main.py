@@ -9,7 +9,7 @@ bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
 dp.include_router(router)
-# dp.message.middleware(AntiSpamMiddleware())
+dp.message.middleware(AntiSpamMiddleware())
 
 async def main():
     await dp.start_polling(bot)
