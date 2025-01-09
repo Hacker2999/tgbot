@@ -6,11 +6,11 @@ from aiogram.loggers import event
 from aiogram.methods import PinChatMessage
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberUpdated, BotCommand, \
     MenuButtonCommands, ChatPhoto
-from aiogram.filters import Command, ChatMemberUpdatedFilter, IS_ADMIN, MEMBER
+from aiogram.filters import Command, ChatMemberUpdatedFilter, IS_ADMIN, MEMBER, Filter
 from aiogram.filters import IS_MEMBER, IS_NOT_MEMBER, Command
 import random
 
-from magic_filter import MagicFilter
+from aiogram import F
 from peewee import *
 from aiogram.utils.formatting import sizeof
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -125,16 +125,6 @@ async def handle_member_leave(event: ChatMemberUpdated, bot: Bot):
             text=f"{GOODBYE_MESSAGE}, {event.from_user.first_name}!\n"
                  f"Легенды не вмирают"
         )
-
-# @router.channel_post(ChatAction)
-# async def pinn_channel_message(message: Message, bot: Bot):
-#     try:
-#         await bot.unpin_all_chat_messages(message.chat.id)
-#         await bot.pin_chat_message(message.chat.id, message.id)
-#         print(message.chat.id)
-#     except Exception as e:
-#         print(e)
-
 
 @router.message(Command(BotCommand(command="stat", description="Вывод статистики пользователя")))
 async def stat(message: Message, bot: Bot):
@@ -322,8 +312,18 @@ async def i_want_anekdot(message: Message):
         await message.reply(f"Анекдота не будет. Превышен лимит на день!")
 
 
+# @router.message(F.sender_chat.type == "channel")
+# async def pin_message(message: Message, bot:Bot):
+#     try:
+#         await bot.unpin_all_chat_messages(message.chat.id)
+#         await bot.pin_chat_message(message.chat.id, message.message_id)
+#         print(f"Сообщение от канала {message.sender_chat.title} закреплено.")
+#     except Exception as e:
+#         print(e)
+
 @router.message()
-async def messages_counter(message: Message):
+async def messages_counter(message: Message, bot:Bot):
+
     try:
         q = (User_listModel
         .insert({
