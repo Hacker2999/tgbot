@@ -6,9 +6,9 @@ from model import AnekModel
 
 def quota_check(userid: int, qcount: int) -> bool:
     """
-    Checks if the user has exceeded their daily quota for anecdotes.
-    If the quota is exceeded and a day has passed since the last request, resets the count.
-    Returns True if the user can receive an anecdote, False otherwise.
+    Проверяет, превысил ли пользователь дневной лимит анекдотов.
+    Если лимит превышен и прошёл день с последнего запроса, сбрасывает счётчик.
+    Возвращает True, если пользователь может получить анекдот, иначе False.
     """
     q = (
         AnekModel.select(AnekModel.created_at)
@@ -16,11 +16,11 @@ def quota_check(userid: int, qcount: int) -> bool:
         .first()
     )
     if not q or not hasattr(q, 'created_at'):
-        # User not found in DB, allow action (will be inserted on first use)
+        # Пользователь не найден в БД, разрешить действие (будет добавлен при первом использовании)
         return True
     recent_time = q.created_at
     now = datetime.now(timezone.utc)
-    # Ensure recent_time is timezone-aware
+    # Убедиться, что recent_time имеет информацию о часовом поясе
     if recent_time.tzinfo is None:
         recent_time = recent_time.replace(tzinfo=timezone.utc)
     days_passed = (now - recent_time).days

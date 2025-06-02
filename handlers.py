@@ -36,9 +36,12 @@ user_commands = [
     BotCommand(command="anekdot", description="Внимание,анекдот"),
 ]
 
-RULES_MESSAGE_ID = 1  # TODO: Set this to the actual message ID with the rules in your chat
+RULES_MESSAGE_ID = 1  # TODO: Установите сюда реальный ID сообщения с правилами в вашем чате
 
 def parse_time_arg(arg: str) -> timedelta:
+    """
+    Парсит строку с указанием времени (например, '5min', '2h', '1d') и возвращает timedelta.
+    """
     match = re.match(r"(\d+)\s*(min|h|d|w|m|y)?", arg)
     if not match:
         return None
@@ -57,11 +60,13 @@ def parse_time_arg(arg: str) -> timedelta:
     elif unit == "y":
         return timedelta(days=365*value)
     else:
-        return timedelta(seconds=value)  # fallback
+        return timedelta(seconds=value)  # по умолчанию секунды
 
 @router.my_chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
 async def handle_member_join(event: ChatMemberUpdated, bot: Bot) -> None:
-    """Handle a user (or bot) joining the chat."""
+    """
+    Обработка добавления пользователя или бота в чат.
+    """
     try:
         if event.new_chat_member:
             if event.new_chat_member.user.id == bot.id:
@@ -78,7 +83,7 @@ async def handle_member_join(event: ChatMemberUpdated, bot: Bot) -> None:
                 q.execute()
                 await bot.send_message(
                     chat_id=event.chat.id,
-                    text="Вы добавили отвального бота себе в чат"
+                    text="Бот успешно добавлен в этот чат!"
                 )
             else:
                 q = (
@@ -105,11 +110,13 @@ async def handle_member_join(event: ChatMemberUpdated, bot: Bot) -> None:
                     text=f"{WELCOME_MESSAGE}, {event.from_user.first_name}!"
                 )
     except Exception as e:
-        logger.error(f"Error in handle_member_join: {e}")
+        logger.error(f"Ошибка в handle_member_join: {e}")
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_MEMBER >> IS_NOT_MEMBER))
 async def handle_member_leave(event: ChatMemberUpdated, bot: Bot) -> None:
-    """Handle a user leaving the chat."""
+    """
+    Обработка выхода пользователя из чата.
+    """
     try:
         q = (
             TextModel
@@ -131,24 +138,25 @@ async def handle_member_leave(event: ChatMemberUpdated, bot: Bot) -> None:
             minutes = (time_withus.seconds % 3600) // 60
             await bot.send_message(
                 chat_id=event.chat.id,
-                text=f"{GOODBYE_MESSAGE}, {event.from_user.first_name}!\n"
-                     f"Кол-во сообщений: {q2.message_count}\n"
-                     f"Был с нами: \n"
-                     f"Дней: {days}\n"
-                     f"Часов: {hours}\n"
-                     f"Минут: {minutes}\n"
+                text=(
+                    f"{GOODBYE_MESSAGE}, {event.from_user.first_name}!\n"
+                    f"Сообщений: {q2.message_count}\n"
+                    f"Был с нами: {days} дн., {hours} ч., {minutes} мин."
+                )
             )
         else:
             await bot.send_message(
                 chat_id=event.chat.id,
-                text=f"{GOODBYE_MESSAGE}, {event.from_user.first_name}!\nЛегенды не вмирают"
+                text=f"{GOODBYE_MESSAGE}, {event.from_user.first_name}! Легенды не умирают."
             )
     except Exception as e:
-        logger.error(f"Error in handle_member_leave: {e}")
+        logger.error(f"Ошибка в handle_member_leave: {e}")
 
 @router.message(Command(BotCommand(command="stat", description="Вывод статистики пользователя")))
 async def stat(message: Message, bot: Bot) -> None:
-    """Show user statistics."""
+    """
+    Показать статистику пользователя.
+    """
     try:
         q = (
             User_listModel
@@ -163,12 +171,11 @@ async def stat(message: Message, bot: Bot) -> None:
             minutes = (time_withus.seconds % 3600) // 60
             await bot.send_message(
                 chat_id=message.chat.id,
-                text=f"Статистика, {message.from_user.first_name}'a:\n"
-                     f"Кол-во сообщений: {q.message_count}\n"
-                     f"C нами уже: \n"
-                     f"Дней: {days}\n"
-                     f"Часов: {hours}\n"
-                     f"Минут: {minutes}\n"
+                text=(
+                    f"Статистика для {message.from_user.first_name}:\n"
+                    f"Сообщений: {q.message_count}\n"
+                    f"С нами: {days} дн., {hours} ч., {minutes} мин."
+                )
             )
         else:
             await bot.send_message(
@@ -176,7 +183,7 @@ async def stat(message: Message, bot: Bot) -> None:
                 text="Нет данных о пользователе."
             )
     except Exception as e:
-        logger.error(f"Error in stat: {e}")
+        logger.error(f"Ошибка в stat: {e}")
         await bot.send_message(
             chat_id=message.chat.id,
             text="Ошибка при получении статистики пользователя."
@@ -184,7 +191,9 @@ async def stat(message: Message, bot: Bot) -> None:
 
 @router.message(Command(BotCommand(command="set_welcome", description="Изменить приветственное сообщение")))
 async def set_welcome(message: Message) -> None:
-    """Set the welcome message."""
+    """
+    Изменить приветственное сообщение.
+    """
     try:
         if message.reply_to_message and message.reply_to_message.text:
             WELCOME_MESSAGE = message.reply_to_message.text
@@ -201,12 +210,14 @@ async def set_welcome(message: Message) -> None:
         q.execute()
         await message.reply("Приветствие обновлено!")
     except Exception as e:
-        logger.error(f"Error in set_welcome: {e}")
+        logger.error(f"Ошибка в set_welcome: {e}")
         await message.reply("Приветствие не обновлено!")
 
 @router.message(Command(BotCommand(command="set_bye", description="Изменить прощальное сообщение")))
 async def set_bye(message: Message) -> None:
-    """Set the goodbye message."""
+    """
+    Изменить прощальное сообщение.
+    """
     try:
         if message.reply_to_message and message.reply_to_message.text:
             GOODBYE_MESSAGE = message.reply_to_message.text
@@ -223,12 +234,14 @@ async def set_bye(message: Message) -> None:
         q.execute()
         await message.reply("Прощание обновлено!")
     except Exception as e:
-        logger.error(f"Error in set_bye: {e}")
+        logger.error(f"Ошибка в set_bye: {e}")
         await message.reply("Прощание не обновлено!")
 
 @router.message(Command(BotCommand(command="add_button", description="Добавить кнопку в ссылках")))
 async def add_button(message: Message) -> None:
-    """Add a button to the links list."""
+    """
+    Добавить кнопку в список ссылок.
+    """
     try:
         text = message.text.removeprefix('/add_button ').strip()
         parts = text.split('" "')
@@ -251,24 +264,28 @@ async def add_button(message: Message) -> None:
         q.execute()
         await message.reply(f"Добавлена кнопка: {button_name}")
     except Exception as e:
-        logger.error(f"Error in add_button: {e}")
+        logger.error(f"Ошибка в add_button: {e}")
         await message.reply("Ошибка при добавлении кнопки.")
 
 @router.message(Command(BotCommand(command="del_button", description="Удалить кнопку в ссылках")))
 async def del_button(message: Message) -> None:
-    """Delete a button from the links list."""
+    """
+    Удалить кнопку из списка ссылок.
+    """
     try:
         text = message.text.removeprefix('/del_button ').strip()
         q = Button_listModel.delete().where(Button_listModel.button_name == text)
         q.execute()
         await message.reply(f"Удалена кнопка: {text}")
     except Exception as e:
-        logger.error(f"Error in del_button: {e}")
+        logger.error(f"Ошибка в del_button: {e}")
         await message.reply("Ошибка при удалении кнопки.")
 
 @router.message(Command(BotCommand(command="rules", description="Правила")))
 async def send_rules(message: Message) -> None:
-    """Send the chat rules."""
+    """
+    Отправить правила чата.
+    """
     try:
         q = (
             TextModel
@@ -279,12 +296,14 @@ async def send_rules(message: Message) -> None:
         rules = q.text_of if q else "Правила не заданы."
         await message.reply(rules)
     except Exception as e:
-        logger.error(f"Error in send_rules: {e}")
+        logger.error(f"Ошибка в send_rules: {e}")
         await message.reply("Ошибка при получении правил.")
 
 @router.message(Command(BotCommand(command="links", description="Полезные ссылки")))
 async def send_links(message: Message) -> None:
-    """Send the list of useful links as inline buttons, including a rules button."""
+    """
+    Отправить список полезных ссылок с инлайн-кнопками, включая кнопку с правилами.
+    """
     try:
         query = Button_listModel.select()
         builder = InlineKeyboardBuilder()
@@ -301,7 +320,7 @@ async def send_links(message: Message) -> None:
             button_name = record["button_name"]
             button_link = record["button_link"]
             builder.button(text=button_name, url=button_link)
-        # Add a rules button (link to a message in the chat)
+        # Добавить кнопку с правилами (ссылка на сообщение в чате)
         if message.chat.type in ("group", "supergroup"):
             chat_id = message.chat.id
             rules_url = f"https://t.me/c/{str(chat_id)[4:]}/{RULES_MESSAGE_ID}" if str(chat_id).startswith("-100") else None
@@ -309,12 +328,14 @@ async def send_links(message: Message) -> None:
                 builder.button(text="Правила чата", url=rules_url)
         await message.reply("Ссылки:", reply_markup=builder.as_markup())
     except Exception as e:
-        logger.error(f"Error in send_links: {e}")
+        logger.error(f"Ошибка в send_links: {e}")
         await message.reply("Ошибка при получении ссылок.")
 
 @router.message(Command(BotCommand(command="size", description="Команда по измерению своего бубуя")))
 async def measure_size(message: Message) -> None:
-    """Send a random size message, save it for the user, and reset at the start of a new day."""
+    """
+    Отправить случайный размер, сохранить его для пользователя и сбросить в начале нового дня.
+    """
     try:
         user_id = message.from_user.id
         username = message.from_user.first_name or message.from_user.username
@@ -344,14 +365,16 @@ async def measure_size(message: Message) -> None:
         with open("xyz.txt", "r", encoding="utf-8") as file:
             lines = [line.strip() for line in file]
         dick_name = random.choice(lines)
-        await message.reply(f"{dick_name} of {username} {size} см")
+        await message.reply(f"{dick_name} {username}: {size} см")
     except Exception as e:
-        logger.error(f"Error in measure_size: {e}")
+        logger.error(f"Ошибка в measure_size: {e}")
         await message.reply("Ошибка при измерении размера.")
 
 @router.message(Command(BotCommand(command="anekdot", description="Внимание, АНЕКДОТ!!!")))
 async def i_want_anekdot(message: Message) -> None:
-    """Send a random joke if the user is within quota."""
+    """
+    Отправить случайный анекдот, если пользователь не превысил лимит.
+    """
     try:
         userId = message.from_user.id
         q2 = (
@@ -382,17 +405,19 @@ async def i_want_anekdot(message: Message) -> None:
                 q.execute()
                 await message.reply(anekdot, parse_mode="markdown")
             except Exception as e:
-                logger.error(f"Error fetching joke: {e}")
-                await message.reply("Анекдота не будет. Системная ошибка, обратитесь к отвальному создателю")
+                logger.error(f"Ошибка при получении анекдота: {e}")
+                await message.reply("Анекдота не будет. Системная ошибка, обратитесь к администратору.")
         else:
             await message.reply("Анекдота не будет. Превышен лимит на день!")
     except Exception as e:
-        logger.error(f"Error in i_want_anekdot: {e}")
+        logger.error(f"Ошибка в i_want_anekdot: {e}")
         await message.reply("Ошибка при получении анекдота.")
 
 @router.message()
 async def messages_counter(message: Message, bot: Bot) -> None:
-    """Count user messages for statistics."""
+    """
+    Считать сообщения пользователя для статистики.
+    """
     try:
         q = (
             User_listModel
@@ -407,11 +432,13 @@ async def messages_counter(message: Message, bot: Bot) -> None:
         )
         q.execute()
     except Exception as e:
-        logger.error(f"Error in messages_counter: {e}")
+        logger.error(f"Ошибка в messages_counter: {e}")
 
 @router.message(Command("m"))
 async def admin_mute(message: Message, bot: Bot) -> None:
-    """Mute a user for a specified time or indefinitely."""
+    """
+    Мут пользователя на определённое время или навсегда.
+    """
     try:
         if not message.reply_to_message:
             await message.reply("Ответьте на сообщение пользователя, чтобы замутить его.")
@@ -431,12 +458,14 @@ async def admin_mute(message: Message, bot: Bot) -> None:
         time_str = f"на {args[1]}" if len(args) > 1 else "навсегда"
         await message.reply(f"{message.reply_to_message.from_user.first_name} в муте {time_str}")
     except Exception as e:
-        logger.error(f"Error in admin_mute: {e}")
+        logger.error(f"Ошибка в admin_mute: {e}")
         await message.reply("Ошибка при муте пользователя.")
 
 @router.message(Command("b"))
 async def admin_ban(message: Message, bot: Bot) -> None:
-    """Ban a user for a specified time or indefinitely."""
+    """
+    Бан пользователя на определённое время или навсегда.
+    """
     try:
         if not message.reply_to_message:
             await message.reply("Ответьте на сообщение пользователя, чтобы забанить его.")
@@ -455,14 +484,16 @@ async def admin_ban(message: Message, bot: Bot) -> None:
         time_str = f"на {args[1]}" if len(args) > 1 else "навсегда"
         await message.reply(f"{message.reply_to_message.from_user.first_name} забанен {time_str}")
     except Exception as e:
-        logger.error(f"Error in admin_ban: {e}")
+        logger.error(f"Ошибка в admin_ban: {e}")
         await message.reply("Ошибка при бане пользователя.")
 
 @router.message(F.sender_chat.type == "channel")
 async def pin_only_last_channel_message(message: Message, bot: Bot) -> None:
-    """Unpin all, then pin the latest channel message in the group."""
+    """
+    Открепить все и закрепить последнее сообщение канала в группе.
+    """
     try:
         await bot.unpin_all_chat_messages(message.chat.id)
         await bot.pin_chat_message(message.chat.id, message.message_id)
     except Exception as e:
-        logger.warning(f"Failed to unpin/pin channel message: {e}")
+        logger.warning(f"Не удалось закрепить сообщение канала: {e}")

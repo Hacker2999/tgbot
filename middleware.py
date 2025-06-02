@@ -12,10 +12,10 @@ logger = logging.getLogger(__name__)
 
 class AntiSpamMiddleware(BaseMiddleware):
     """
-    Middleware to prevent spam by muting users who send repeated messages.
-    Tracks user messages and applies increasing penalties for repeated spam.
+    Мидлвар для предотвращения спама: мутит пользователей, которые отправляют повторяющиеся сообщения.
+    Отслеживает сообщения пользователей и применяет возрастающие наказания за повторный спам.
     """
-    # Mute durations for each penalty level
+    # Длительности мута для каждого уровня наказания
     MUTE_DURATIONS = {
         1: timedelta(days=1),
         2: timedelta(weeks=1),
@@ -25,20 +25,20 @@ class AntiSpamMiddleware(BaseMiddleware):
     DEFAULT_MUTE_DURATION = timedelta(days=365)
 
     def __init__(self, spam_limit: int = 5) -> None:
-        self.spam_limit = spam_limit  # Limit of identical messages per minute
+        self.spam_limit = spam_limit  # Лимит одинаковых сообщений в минуту
         self.user_messages: Dict[int, list] = defaultdict(list)  # user_id -> [(datetime, text)]
-        self.user_penalties: Dict[int, int] = defaultdict(int)  # user_id -> penalty count
+        self.user_penalties: Dict[int, int] = defaultdict(int)  # user_id -> количество наказаний
         super().__init__()
 
     async def is_admin(self, bot: Bot, chat_id: int, user_id: int) -> bool:
-        """Check if a user is an admin in the chat."""
+        """Проверить, является ли пользователь админом в чате."""
         try:
             chat_admins = await bot.get_chat_administrators(chat_id)
             return any(admin.user.id == user_id for admin in chat_admins)
         except TelegramBadRequest:
             return False
         except Exception as e:
-            logger.error(f"Error checking admin status: {e}")
+            logger.error(f"Ошибка при проверке статуса администратора: {e}")
             return False
 
     async def __call__(
@@ -54,21 +54,21 @@ class AntiSpamMiddleware(BaseMiddleware):
             bot: Bot = data['bot']
             now = datetime.now(timezone.utc)
 
-            # Skip spam check for admins
+            # Пропустить проверку спама для админов
             if await self.is_admin(bot, chat_id, user_id):
                 return await handler(event, data)
 
-            # Store the user's message
+            # Сохраняем сообщение пользователя
             self.user_messages[user_id].append((now, event.text))
 
-            # Keep only messages from the last minute
+            # Оставляем только сообщения за последнюю минуту
             self.user_messages[user_id] = [
                 (msg_time, msg_text)
                 for msg_time, msg_text in self.user_messages[user_id]
                 if (now - msg_time).total_seconds() < 60
             ]
 
-            # Check for repeated spam
+            # Проверка на повторяющийся спам
             messages_texts = [msg_text for _, msg_text in self.user_messages[user_id]]
             if (
                 len(messages_texts) >= self.spam_limit and
@@ -107,20 +107,20 @@ class AntiSpamMiddleware(BaseMiddleware):
                         )
                     )
                     q.execute()
-                    logger.info(f"Muted user {user_name} ({user_id}) in chat {chat_id} for spam for {mute_duration}.")
-                    # Delete the spam message
+                    logger.info(f"Пользователь {user_name} ({user_id}) замучен в чате {chat_id} за спам на {mute_duration}.")
+                    # Удалить спам-сообщение
                     try:
                         await event.delete()
                     except Exception as del_err:
-                        logger.warning(f"Failed to delete spam message: {del_err}")
-                    # Notify the user
+                        logger.warning(f"Не удалось удалить спам-сообщение: {del_err}")
+                    # Уведомить пользователя
                     try:
                         await bot.send_message(user_id, f"Вы были замучены за спам в чате {chat_id} на {mute_duration}.")
                     except Exception as notify_err:
-                        logger.warning(f"Failed to notify user about mute: {notify_err}")
+                        logger.warning(f"Не удалось уведомить пользователя о муте: {notify_err}")
                     await event.reply(f"Мут за спам {user_name} на {mute_duration}.")
                 except Exception as e:
-                    logger.error(f"Failed to mute user {user_id} in chat {chat_id}: {e}")
+                    logger.error(f"Не удалось замутить пользователя {user_id} в чате {chat_id}: {e}")
                 return
 
         return await handler(event, data)

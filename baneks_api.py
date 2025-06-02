@@ -6,8 +6,8 @@ from typing import Optional
 
 async def fetch_random_joke() -> Optional[str]:
     """
-    Fetch a random joke from baneks.site using requests in a thread for maximum compatibility.
-    Returns the joke as markdown text, or None if an error occurs.
+    Получить случайный анекдот с baneks.site, используя requests в отдельном потоке для максимальной совместимости.
+    Возвращает анекдот в виде markdown-текста или None в случае ошибки.
     """
     def sync_fetch() -> Optional[str]:
         try:

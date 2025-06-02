@@ -14,10 +14,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def get_api_token() -> Optional[str]:
-    """Get the API token from config or environment."""
+    """Получить API токен из config или переменных окружения."""
     token = API_TOKEN
     if not token:
-        logger.error("API token is not set! Set API_TOKEN in config.py.")
+        logger.error("API токен не установлен! Установите API_TOKEN в config.py.")
     return token
 
 async def notify_all_chats(bot: Bot, text: str):
@@ -27,12 +27,12 @@ async def notify_all_chats(bot: Bot, text: str):
             try:
                 await bot.send_message(chat_id, text)
             except Exception as e:
-                logger.warning(f"Failed to notify chat {chat_id}: {e}")
+                logger.warning(f"Не удалось уведомить чат {chat_id}: {e}")
     except Exception as e:
-        logger.error(f"Failed to fetch chat list for notifications: {e}")
+        logger.error(f"Не удалось получить список чатов для уведомлений: {e}")
 
 async def main() -> None:
-    """Start the Telegram bot with graceful shutdown."""
+    """Запуск Telegram-бота с корректным завершением работы."""
     token = get_api_token()
     if not token:
         return
@@ -44,7 +44,7 @@ async def main() -> None:
     stop_event = asyncio.Event()
 
     def _signal_handler(*_):
-        logger.info("Received shutdown signal. Stopping bot...")
+        logger.info("Получен сигнал завершения. Остановка бота...")
         stop_event.set()
 
     loop = asyncio.get_running_loop()
@@ -52,17 +52,17 @@ async def main() -> None:
         try:
             loop.add_signal_handler(sig, _signal_handler)
         except NotImplementedError:
-            # Signal handlers are not available on Windows for some signals
+            # Обработчики сигналов недоступны на Windows для некоторых сигналов
             pass
 
-    logger.info("Bot is starting...")
+    logger.info("Бот запускается...")
     await bot.send_message(CHANNEL_CHAT_ID, "🤖 Бот запущен и готов к работе!")
     try:
         await dp.start_polling(bot, shutdown_event=stop_event)
     except Exception as e:
-        logger.error(f"Bot stopped with error: {e}")
+        logger.error(f"Бот остановлен с ошибкой: {e}")
     finally:
-        logger.info("Bot shutdown complete.")
+        logger.info("Бот завершил работу.")
         await bot.send_message(CHANNEL_CHAT_ID, "⚠️ Бот завершил работу. До скорой встречи!")
 
 if __name__ == "__main__":
