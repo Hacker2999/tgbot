@@ -108,6 +108,16 @@ class AntiSpamMiddleware(BaseMiddleware):
                     )
                     q.execute()
                     logger.info(f"Muted user {user_name} ({user_id}) in chat {chat_id} for spam for {mute_duration}.")
+                    # Delete the spam message
+                    try:
+                        await event.delete()
+                    except Exception as del_err:
+                        logger.warning(f"Failed to delete spam message: {del_err}")
+                    # Notify the user
+                    try:
+                        await bot.send_message(user_id, f"Вы были замучены за спам в чате {chat_id} на {mute_duration}.")
+                    except Exception as notify_err:
+                        logger.warning(f"Failed to notify user about mute: {notify_err}")
                     await event.reply(f"Мут за спам {user_name} на {mute_duration}.")
                 except Exception as e:
                     logger.error(f"Failed to mute user {user_id} in chat {chat_id}: {e}")

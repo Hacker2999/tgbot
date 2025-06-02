@@ -1,8 +1,9 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import random
+import re
 
-from aiogram import Router, Bot
+from aiogram import Router, Bot, F
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberUpdated, BotCommand, MenuButtonCommands
 from aiogram.filters import Command, ChatMemberUpdatedFilter, IS_MEMBER, IS_NOT_MEMBER
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -11,6 +12,7 @@ from peewee import fn
 from baneks_api import fetch_random_joke
 from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel
 from utils import quota_check
+from config import RULES, API_TOKEN, SPAM_LIMIT, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -33,6 +35,29 @@ user_commands = [
     BotCommand(command="links", description="Полезные ссылки"),
     BotCommand(command="anekdot", description="Внимание,анекдот"),
 ]
+
+RULES_MESSAGE_ID = 1  # TODO: Set this to the actual message ID with the rules in your chat
+
+def parse_time_arg(arg: str) -> timedelta:
+    match = re.match(r"(\d+)\s*(min|h|d|w|m|y)?", arg)
+    if not match:
+        return None
+    value, unit = match.groups()
+    value = int(value)
+    if unit == "min":
+        return timedelta(minutes=value)
+    elif unit == "h":
+        return timedelta(hours=value)
+    elif unit == "d":
+        return timedelta(days=value)
+    elif unit == "w":
+        return timedelta(weeks=value)
+    elif unit == "m":
+        return timedelta(days=30*value)
+    elif unit == "y":
+        return timedelta(days=365*value)
+    else:
+        return timedelta(seconds=value)  # fallback
 
 @router.my_chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
 async def handle_member_join(event: ChatMemberUpdated, bot: Bot) -> None:
@@ -259,7 +284,7 @@ async def send_rules(message: Message) -> None:
 
 @router.message(Command(BotCommand(command="links", description="Полезные ссылки")))
 async def send_links(message: Message) -> None:
-    """Send the list of useful links as inline buttons."""
+    """Send the list of useful links as inline buttons, including a rules button."""
     try:
         query = Button_listModel.select()
         builder = InlineKeyboardBuilder()
@@ -271,11 +296,17 @@ async def send_links(message: Message) -> None:
             for record in query
         ]
         link_list = result
-        builder.adjust(len(link_list))
+        builder.adjust(len(link_list) + 1)
         for record in link_list:
             button_name = record["button_name"]
             button_link = record["button_link"]
             builder.button(text=button_name, url=button_link)
+        # Add a rules button (link to a message in the chat)
+        if message.chat.type in ("group", "supergroup"):
+            chat_id = message.chat.id
+            rules_url = f"https://t.me/c/{str(chat_id)[4:]}/{RULES_MESSAGE_ID}" if str(chat_id).startswith("-100") else None
+            if rules_url:
+                builder.button(text="Правила чата", url=rules_url)
         await message.reply("Ссылки:", reply_markup=builder.as_markup())
     except Exception as e:
         logger.error(f"Error in send_links: {e}")
@@ -297,9 +328,7 @@ async def measure_size(message: Message) -> None:
         if q and q.date == today:
             size = q.size
         else:
-            with open("xyz.txt", "r", encoding="utf-8") as file:
-                lines = [line.strip() for line in file]
-            size = random.randint(-1, 50)
+            size = random.randint(4, 100)
             (
                 SizeModel
                 .insert({
@@ -314,7 +343,8 @@ async def measure_size(message: Message) -> None:
             ).execute()
         with open("xyz.txt", "r", encoding="utf-8") as file:
             lines = [line.strip() for line in file]
-        await message.reply(f"{random.choice(lines)} у {username}'a: {size} см")
+        dick_name = random.choice(lines)
+        await message.reply(f"{dick_name} of {username} {size} см")
     except Exception as e:
         logger.error(f"Error in measure_size: {e}")
         await message.reply("Ошибка при измерении размера.")
@@ -378,3 +408,60 @@ async def messages_counter(message: Message, bot: Bot) -> None:
         q.execute()
     except Exception as e:
         logger.error(f"Error in messages_counter: {e}")
+
+@router.message(Command("m"))
+async def admin_mute(message: Message, bot: Bot) -> None:
+    """Mute a user for a specified time or indefinitely."""
+    try:
+        if not message.reply_to_message:
+            await message.reply("Ответьте на сообщение пользователя, чтобы замутить его.")
+            return
+        user_id = message.reply_to_message.from_user.id
+        args = message.text.split(maxsplit=1)
+        duration = None
+        if len(args) > 1:
+            duration = parse_time_arg(args[1])
+        until_date = datetime.now() + (duration if duration else timedelta(days=365*100))
+        await bot.restrict_chat_member(
+            chat_id=message.chat.id,
+            user_id=user_id,
+            permissions={"can_send_messages": False},
+            until_date=until_date
+        )
+        time_str = f"на {args[1]}" if len(args) > 1 else "навсегда"
+        await message.reply(f"{message.reply_to_message.from_user.first_name} в муте {time_str}")
+    except Exception as e:
+        logger.error(f"Error in admin_mute: {e}")
+        await message.reply("Ошибка при муте пользователя.")
+
+@router.message(Command("b"))
+async def admin_ban(message: Message, bot: Bot) -> None:
+    """Ban a user for a specified time or indefinitely."""
+    try:
+        if not message.reply_to_message:
+            await message.reply("Ответьте на сообщение пользователя, чтобы забанить его.")
+            return
+        user_id = message.reply_to_message.from_user.id
+        args = message.text.split(maxsplit=1)
+        duration = None
+        if len(args) > 1:
+            duration = parse_time_arg(args[1])
+        until_date = datetime.now() + (duration if duration else timedelta(days=365*100))
+        await bot.ban_chat_member(
+            chat_id=message.chat.id,
+            user_id=user_id,
+            until_date=until_date
+        )
+        time_str = f"на {args[1]}" if len(args) > 1 else "навсегда"
+        await message.reply(f"{message.reply_to_message.from_user.first_name} забанен {time_str}")
+    except Exception as e:
+        logger.error(f"Error in admin_ban: {e}")
+        await message.reply("Ошибка при бане пользователя.")
+
+@router.message(F.sender_chat.type == "channel")
+async def auto_unpin_channel_message(message: Message, bot: Bot) -> None:
+    """Automatically unpin messages sent by channels."""
+    try:
+        await bot.unpin_chat_message(message.chat.id, message.message_id)
+    except Exception as e:
+        logger.warning(f"Failed to unpin channel message: {e}")
