@@ -1,50 +1,85 @@
-# Telegram Bot Project
+# Телеграм-бот "Отвальный Бот"
 
-## Features
-- Anti-spam middleware
-- User statistics and message counting
-- Welcome and goodbye messages
-- Admin and user commands
-- Fetches random jokes from baneks.site
-- Dynamic button/links management
+## Описание
 
-## Requirements
+Многофункциональный Telegram-бот для групп и каналов с поддержкой антиспама, статистики пользователей, анекдотов, динамических ссылок и гибкой системой команд. Все сообщения и интерфейс — на русском языке.
+
+### Основные возможности
+- **Антиспам**: автоматический мут за повторяющиеся сообщения, с увеличением срока за повторные нарушения.
+- **Статистика пользователей**: учёт количества сообщений, времени пребывания в чате, команда `/stat`.
+- **Приветствие и прощание**: настраиваемые сообщения при входе/выходе пользователя.
+- **Команды для пользователей и админов**:
+  - `/stat` — статистика пользователя
+  - `/set_welcome` — изменить приветствие (админ)
+  - `/set_bye` — изменить прощание (админ)
+  - `/rules` — правила чата
+  - `/size` — измерить "размер" (рандом + никнейм из xyz.txt)
+  - `/links` — полезные ссылки с кнопками
+  - `/add_button` и `/del_button` — управление кнопками (админ)
+  - `/anekdot` — случайный анекдот с baneks.site (с лимитом)
+  - `/m` — мут пользователя (админ)
+  - `/b` — бан пользователя (админ)
+- **Динамические кнопки**: добавление/удаление ссылок через команды.
+- **Интеграция с baneks.site**: свежие анекдоты по команде.
+- **Уведомления о запуске/остановке**: бот сообщает о своём статусе в канал.
+- **Гибкая настройка через config.py**.
+
+---
+
+## Требования
 - Python 3.8+
-- PostgreSQL database
+- PostgreSQL (рекомендуется версия 12+)
+- Установленные зависимости из `requirements.txt`
 
-## Setup
-1. **Clone the repository**
-2. **Install dependencies:**
+---
+
+## Установка и запуск
+
+1. **Клонируйте репозиторий:**
+   ```bash
+   git clone <ссылка_на_репозиторий>
+   cd tgbot
+   ```
+
+2. **Установите зависимости:**
    ```bash
    pip install -r requirements.txt
    ```
-3. **Create a `.env` file** in the project root with the following content:
-   ```env
-   API_TOKEN=your_telegram_bot_token
-   DB_NAME=your_db_name
-   DB_USER=your_db_user
-   DB_PASSWORD=your_db_password
-   DB_HOST=your_db_host
-   DB_PORT=your_db_port
-   # Optional
-   RULES=1. Уважать друг друга.\n2. Не флудить.\n3. Соблюдать законы.
-   SPAM_LIMIT=5
-   ```
-4. **Run the bot:**
+
+3. **Настройте файл `config.py`:**
+   Внесите свои значения в следующие переменные:
+   - `API_TOKEN` — токен Telegram-бота (обязательно)
+   - `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` — параметры подключения к PostgreSQL (обязательно)
+   - `CHANNEL_CHAT_ID` — ID канала для уведомлений (обязательно)
+   - `RULES` — текст правил чата (опционально)
+   - `SPAM_LIMIT` — лимит одинаковых сообщений в минуту (опционально, по умолчанию 5)
+
+4. **Запустите бота:**
    ```bash
    python main.py
    ```
 
-## Environment Variables
-- `API_TOKEN`: Telegram bot token (required)
-- `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`: PostgreSQL connection (required)
-- `RULES`: Chat rules (optional)
-- `SPAM_LIMIT`: Spam message limit per minute (optional, default: 5)
+---
 
-## Notes
-- Make sure your database is running and accessible.
-- The file `xyz.txt` must exist for the `/size` command.
-- For local development, install [python-dotenv](https://pypi.org/project/python-dotenv/) to load `.env` automatically.
+## Структура проекта
+- `main.py` — запуск и инициализация бота, уведомления о старте/остановке
+- `handlers.py` — все обработчики команд, событий и сообщений
+- `middleware.py` — антиспам-мидлвар
+- `model.py` — peewee-модели для работы с БД
+- `baneks_api.py` — получение анекдотов с baneks.site
+- `utils.py` — утилиты (например, проверка лимита анекдотов)
+- `config.py` — конфигурация (токены, параметры БД, лимиты и др.)
+- `xyz.txt` — база для генерации никнеймов в команде /size
+- `requirements.txt` — зависимости проекта
 
-## License
+---
+
+## Важно
+- Перед запуском убедитесь, что база данных PostgreSQL создана и доступна.
+- Файл `xyz.txt` должен существовать для работы команды `/size`.
+- Бот должен быть админом в канале/группе для корректной работы всех функций.
+
+---
+
+## Лицензия
 MIT 
