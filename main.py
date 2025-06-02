@@ -5,7 +5,7 @@ import signal
 from typing import Optional
 
 from aiogram import Bot, Dispatcher
-from config import API_TOKEN
+from config import API_TOKEN, CHANNEL_CHAT_ID
 from handlers import router
 from middleware import AntiSpamMiddleware
 from model import Chat_listModel
@@ -56,14 +56,14 @@ async def main() -> None:
             pass
 
     logger.info("Bot is starting...")
-    await notify_all_chats(bot, "🤖 Бот запущен и готов к работе!")
+    await bot.send_message(CHANNEL_CHAT_ID, "🤖 Бот запущен и готов к работе!")
     try:
         await dp.start_polling(bot, shutdown_event=stop_event)
     except Exception as e:
         logger.error(f"Bot stopped with error: {e}")
     finally:
         logger.info("Bot shutdown complete.")
-        await notify_all_chats(bot, "⚠️ Бот завершил работу. До скорой встречи!")
+        await bot.send_message(CHANNEL_CHAT_ID, "⚠️ Бот завершил работу. До скорой встречи!")
 
 if __name__ == "__main__":
     asyncio.run(main())
