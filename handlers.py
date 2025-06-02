@@ -434,7 +434,36 @@ async def i_want_anekdot(message: Message) -> None:
         logger.error(f"Ошибка в i_want_anekdot: {e}")
         await message.reply("Ошибка при получении анекдота.")
 
+@router.message(Command("size_top"))
+async def size_top(message: Message, bot: Bot) -> None:
+    from datetime import datetime
+    today = datetime.now().date()
+    # Получаем все замеры за сегодня
+    query = (
+        SizeModel
+        .select(SizeModel.user_id, SizeModel.size)
+        .where(SizeModel.date == today)
+        .order_by(SizeModel.size.desc())
+    )
+    results = list(query)
+    if not results:
+        await message.reply("Сегодня ещё никто не измерял размер!")
+        return
 
+    # Эмодзи для топ-3
+    medals = ["🥇", "🥈", "🥉"]
+    lines = []
+    for idx, row in enumerate(results, 1):
+        try:
+            user = await bot.get_chat_member(message.chat.id, row.user_id)
+            name = user.user.first_name
+        except Exception:
+            name = f"ID {row.user_id}"
+        medal = medals[idx-1] if idx <= 3 else f"{idx}."
+        lines.append(f"{medal} <b>{name}</b> — <b>{row.size} см</b>")
+
+    text = "<b>🏆 Турнирная таблица размеров за сегодня:</b>\n\n" + "\n".join(lines)
+    await message.reply(text, parse_mode="HTML")
 
 async def is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
     member = await bot.get_chat_member(chat_id, user_id)
