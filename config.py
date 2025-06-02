@@ -1,9 +1,8 @@
-API_TOKEN = "6472001786:AAECoLe6ZhtLtvPuEbPrzAfgfThsy6VzQ_Y"
-RULES = "1. Уважать друг друга.\n2. Не флудить.\n3. Соблюдать законы."
+API_TOKEN = ""
 SPAM_LIMIT = 5  # Лимит одинаковых сообщений в минуту
 
-DB_NAME = "postgres"
-DB_USER = "postgres.gxjowfsxblwtsjuqmulo"
-DB_PASSWORD = "Themach20041"
-DB_HOST = "aws-0-eu-central-1.pooler.supabase.com"
-DB_PORT = "6543"
+DB_NAME = ""
+DB_USER = ""
+DB_PASSWORD = ""
+DB_HOST = ""
+DB_PORT = ""
