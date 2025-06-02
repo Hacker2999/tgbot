@@ -1,19 +1,22 @@
-import httpx
+import requests
 from bs4 import BeautifulSoup
 import markdownify
+import asyncio
 from typing import Optional
 
 async def fetch_random_joke() -> Optional[str]:
     """
-    Fetch a random joke from baneks.site asynchronously.
+    Fetch a random joke from baneks.site using requests in a thread for maximum compatibility.
     Returns the joke as markdown text, or None if an error occurs.
     """
-    url = 'https://baneks.site/random'
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.text, "html.parser")
+    def sync_fetch() -> Optional[str]:
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+            r = requests.get('https://baneks.site/random', headers=headers, timeout=10)
+            r.raise_for_status()
+            soup = BeautifulSoup(r.text, "html.parser")
             joke_divs = soup.select('div[class="joke mdl-shadow--6dp block mdl-card mdl-card--border"]')
             if not joke_divs:
                 return None
@@ -23,6 +26,7 @@ async def fetch_random_joke() -> Optional[str]:
             div_html = paragraphs[0].prettify()
             joke_markdown = markdownify.markdownify(div_html, heading_style="ATX")
             return joke_markdown.strip()
-    except Exception as e:
-        # Optionally log the error here
-        return None
+        except Exception:
+            return None
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, sync_fetch)

@@ -308,6 +308,9 @@ async def i_want_anekdot(message: Message) -> None:
         if quota_check(userId, count_qu):
             try:
                 anekdot = await fetch_random_joke()
+                if not anekdot:
+                    await message.reply("Не удалось получить анекдот. Попробуйте позже.")
+                    return
                 q = (
                     AnekModel
                     .insert({
