@@ -344,11 +344,6 @@ async def send_links(message: Message) -> None:
             button_name = record["button_name"]
             button_link = record["button_link"]
             builder.button(text=button_name, url=button_link)
-        if message.chat.type in ("group", "supergroup"):
-            chat_id = message.chat.id
-            rules_url = f"https://t.me/c/{str(chat_id)[4:]}/{RULES_MESSAGE_ID}" if str(chat_id).startswith("-100") else None
-            if rules_url:
-                builder.button(text="Правила чата", url=rules_url)
         logger.info(f"Отправлены ссылки пользователю {message.from_user.id}")
         await message.reply("Ссылки:", reply_markup=builder.as_markup())
     except Exception as e:
@@ -439,25 +434,7 @@ async def i_want_anekdot(message: Message) -> None:
         logger.error(f"Ошибка в i_want_anekdot: {e}")
         await message.reply("Ошибка при получении анекдота.")
 
-@router.message()
-async def messages_counter(message: Message, bot: Bot) -> None:
-    logger.debug(f"messages_counter: user_id={message.from_user.id}, chat_id={message.chat.id}")
-    try:
-        q = (
-            User_listModel
-            .insert({
-                User_listModel.created_at: fn.now(),
-                User_listModel.user_id: message.from_user.id,
-            })
-            .on_conflict(
-                conflict_target=[User_listModel.user_id],
-                update={User_listModel.message_count: User_listModel.message_count + 1}
-            )
-        )
-        q.execute()
-        logger.info(f"Сообщение пользователя {message.from_user.id} учтено в статистике")
-    except Exception as e:
-        logger.error(f"Ошибка в messages_counter: {e}")
+
 
 async def is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
     member = await bot.get_chat_member(chat_id, user_id)
@@ -538,6 +515,26 @@ async def admin_ban(message: Message, bot: Bot) -> None:
     except Exception as e:
         logger.error(f"Ошибка в admin_ban: {e}")
         await message.reply("Ошибка при бане пользователя.")
+
+@router.message()
+async def messages_counter(message: Message, bot: Bot) -> None:
+    logger.debug(f"messages_counter: user_id={message.from_user.id}, chat_id={message.chat.id}")
+    try:
+        q = (
+            User_listModel
+            .insert({
+                User_listModel.created_at: fn.now(),
+                User_listModel.user_id: message.from_user.id,
+            })
+            .on_conflict(
+                conflict_target=[User_listModel.user_id],
+                update={User_listModel.message_count: User_listModel.message_count + 1}
+            )
+        )
+        q.execute()
+        logger.info(f"Сообщение пользователя {message.from_user.id} учтено в статистике")
+    except Exception as e:
+        logger.error(f"Ошибка в messages_counter: {e}")
 
 @router.message(F.sender_chat.type == "channel")
 async def pin_only_last_channel_message(message: Message, bot: Bot) -> None:
