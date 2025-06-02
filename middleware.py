@@ -14,6 +14,7 @@ class AntiSpamMiddleware(BaseMiddleware):
     """
     Мидлвар для предотвращения спама: мутит пользователей, которые отправляют повторяющиеся сообщения.
     Отслеживает сообщения пользователей и применяет возрастающие наказания за повторный спам.
+    Теперь отслеживает спам по тексту, стикерам, гифкам и картинкам.
     """
     # Длительности мута для каждого уровня наказания
     MUTE_DURATIONS = {
@@ -26,7 +27,7 @@ class AntiSpamMiddleware(BaseMiddleware):
 
     def __init__(self, spam_limit: int = 5) -> None:
         self.spam_limit = spam_limit  # Лимит одинаковых сообщений в минуту
-        self.user_messages: Dict[int, list] = defaultdict(list)  # user_id -> [(datetime, text)]
+        self.user_messages: Dict[int, list] = defaultdict(list)  # user_id -> [(datetime, content_id)]
         self.user_penalties: Dict[int, int] = defaultdict(int)  # user_id -> количество наказаний
         super().__init__()
 
@@ -58,21 +59,37 @@ class AntiSpamMiddleware(BaseMiddleware):
             if await self.is_admin(bot, chat_id, user_id):
                 return await handler(event, data)
 
-            # Сохраняем сообщение пользователя
-            self.user_messages[user_id].append((now, event.text))
+            # --- Новый блок: определяем content_id для разных типов сообщений ---
+            if event.text:
+                content_id = f"text:{event.text}"
+            elif event.sticker:
+                content_id = f"sticker:{event.sticker.file_unique_id}"
+            elif event.animation:
+                content_id = f"animation:{event.animation.file_unique_id}"
+            elif event.photo:
+                # Для фото берём file_unique_id самого большого изображения
+                content_id = f"photo:{event.photo[-1].file_unique_id}"
+            else:
+                content_id = None
+
+            if content_id is None:
+                return await handler(event, data)
+
+            # Сохраняем content_id пользователя
+            self.user_messages[user_id].append((now, content_id))
 
             # Оставляем только сообщения за последнюю минуту
             self.user_messages[user_id] = [
-                (msg_time, msg_text)
-                for msg_time, msg_text in self.user_messages[user_id]
+                (msg_time, msg_content)
+                for msg_time, msg_content in self.user_messages[user_id]
                 if (now - msg_time).total_seconds() < 60
             ]
 
             # Проверка на повторяющийся спам
-            messages_texts = [msg_text for _, msg_text in self.user_messages[user_id]]
+            messages_contents = [msg_content for _, msg_content in self.user_messages[user_id]]
             if (
-                len(messages_texts) >= self.spam_limit and
-                len(set(messages_texts[-self.spam_limit:])) == 1
+                len(messages_contents) >= self.spam_limit and
+                len(set(messages_contents[-self.spam_limit:])) == 1
             ):
                 self.user_penalties[user_id] += 1
                 penalty_level = self.user_penalties[user_id]
@@ -118,6 +135,16 @@ class AntiSpamMiddleware(BaseMiddleware):
                         await bot.send_message(user_id, f"Вы были замучены за спам в чате {chat_id} на {mute_duration}.")
                     except Exception as notify_err:
                         logger.warning(f"Не удалось уведомить пользователя о муте: {notify_err}")
+                    # Сообщить в чат
+                    unmute_time = mute_end.strftime('%d.%m.%Y %H:%M')
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text=(
+                            f"Пользователь <b>{user_name}</b> (id: <code>{user_id}</code>) был замучен за спам на {mute_duration}.\n"
+                            f"Размут: <b>{unmute_time}</b>"
+                        ),
+                        parse_mode="HTML"
+                    )
                     await event.reply(f"Мут за спам {user_name} на {mute_duration}.")
                 except Exception as e:
                     logger.error(f"Не удалось замутить пользователя {user_id} в чате {chat_id}: {e}")
