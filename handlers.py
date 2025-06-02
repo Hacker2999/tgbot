@@ -443,6 +443,7 @@ async def messages_counter(message: Message, bot: Bot) -> None:
 
 async def is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
     member = await bot.get_chat_member(chat_id, user_id)
+    logger.info("is_admin check:", user_id, member.status)
     return member.status in ("administrator", "creator")
 
 @router.message(Command("m"))
