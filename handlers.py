@@ -458,11 +458,11 @@ async def admin_ban(message: Message, bot: Bot) -> None:
         logger.error(f"Error in admin_ban: {e}")
         await message.reply("Ошибка при бане пользователя.")
 
-@router.message(F.sender_chat.type == "channel")
-async def auto_unpin_channel_message(message: Message, bot: Bot) -> None:
-    """Automatically unpin all previously pinned messages when a new channel message arrives."""
-    try:
-        # Unpin all pinned messages in the chat
-        await bot.unpin_all_chat_messages(message.chat.id)
-    except Exception as e:
-        logger.warning(f"Failed to unpin all channel messages: {e}")
+@router.message()
+async def auto_unpin_on_channel_pin(message: Message, bot: Bot):
+    # Only act if this is a pin event and the pinned message is from a channel
+    if message.pinned_message and message.pinned_message.sender_chat and message.pinned_message.sender_chat.type == "channel":
+        try:
+            await bot.unpin_all_chat_messages(message.chat.id)
+        except Exception as e:
+            logger.warning(f"Failed to unpin all channel messages on pin: {e}")
