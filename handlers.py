@@ -122,7 +122,7 @@ async def handle_member_join(event: ChatMemberUpdated, bot: Bot) -> None:
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
 async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
-    logger.info(f"User joined: {event.from_user.id}")
+    logger.info(f"User joined: {event.new_chat_member.user.id}")
     try:
         q = (
             TextModel
@@ -133,7 +133,7 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
         WELCOME_MESSAGE = q.text_of if q else "Добро пожаловать!"
         await bot.send_message(
             chat_id=event.chat.id,
-            text=f"{WELCOME_MESSAGE}, {event.from_user.first_name}!"
+            text=f"{WELCOME_MESSAGE}, {event.new_chat_member.user.first_name}!"
         )
     except Exception as e:
         logger.error(f"Ошибка в handle_user_join: {e}")
@@ -158,7 +158,7 @@ async def handle_member_leave(event: ChatMemberUpdated, bot: Bot) -> None:
         )
         logger.debug(f"handle_member_leave: user_stat={q2}")
         if q2:
-            logger.info(f"Пользователь {event.from_user.id} покинул чат {event.chat.id}, был с нами {q2.created_at}")
+            logger.info(f"Пользователь {event.old_chat_member.user.id} покинул чат {event.chat.id}, был с нами {q2.created_at}")
             time_withus = datetime.astimezone(datetime.now()) - q2.created_at
             days = time_withus.days
             hours = time_withus.seconds // 3600
@@ -167,16 +167,16 @@ async def handle_member_leave(event: ChatMemberUpdated, bot: Bot) -> None:
             await bot.send_message(
                 chat_id=event.chat.id,
                 text=(
-                    f"{GOODBYE_MESSAGE}, {event.from_user.first_name}!\n"
+                    f"{GOODBYE_MESSAGE}, {event.old_chat_member.user.first_name}!\n"
                     f"Сообщений: {q2.message_count}\n"
                     f"Был с нами: {days} дн., {hours} ч., {minutes} мин."
                 )
             )
         else:
-            logger.info(f"Пользователь {event.from_user.id} покинул чат {event.chat.id}, данных о нём нет")
+            logger.info(f"Пользователь {event.old_chat_member.user.id} покинул чат {event.chat.id}, данных о нём нет")
             await bot.send_message(
                 chat_id=event.chat.id,
-                text=f"{GOODBYE_MESSAGE}, {event.from_user.first_name}! Легенды не умирают."
+                text=f"{GOODBYE_MESSAGE}, {event.old_chat_member.user.first_name}! Легенды не умирают."
             )
     except Exception as e:
         logger.error(f"Ошибка в handle_member_leave: {e}")
