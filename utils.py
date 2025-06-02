@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from model import AnekModel
+from aiogram.types import Bot
 
 
 def quota_check(userid: int, qcount: int) -> bool:
@@ -36,6 +37,11 @@ def quota_check(userid: int, qcount: int) -> bool:
         return True
     else:
         return False
+
+
+async def is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
+    member = await bot.get_chat_member(chat_id, user_id)
+    return member.status in ("administrator", "creator")
 
 
 

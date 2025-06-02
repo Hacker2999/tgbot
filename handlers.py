@@ -4,14 +4,14 @@ import random
 import re
 
 from aiogram import Router, Bot, F
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberUpdated, BotCommand, MenuButtonCommands
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberUpdated, BotCommand, MenuButtonCommands, ChatPermissions
 from aiogram.filters import Command, ChatMemberUpdatedFilter, IS_MEMBER, IS_NOT_MEMBER
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from peewee import fn
 
 from baneks_api import fetch_random_joke
 from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel
-from utils import quota_check
+from utils import quota_check, is_admin
 from config import RULES, API_TOKEN, SPAM_LIMIT, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
 
 router = Router()
@@ -439,6 +439,10 @@ async def admin_mute(message: Message, bot: Bot) -> None:
     """
     Мут пользователя на определённое время или навсегда.
     """
+    # Проверка на администратора
+    if not await is_admin(bot, message.chat.id, message.from_user.id):
+        await message.reply("Только администратор может использовать эту команду.")
+        return
     try:
         if not message.reply_to_message:
             await message.reply("Ответьте на сообщение пользователя, чтобы замутить его.")
@@ -452,7 +456,7 @@ async def admin_mute(message: Message, bot: Bot) -> None:
         await bot.restrict_chat_member(
             chat_id=message.chat.id,
             user_id=user_id,
-            permissions={"can_send_messages": False},
+            permissions=ChatPermissions(can_send_messages=False),
             until_date=until_date
         )
         time_str = f"на {args[1]}" if len(args) > 1 else "навсегда"
@@ -466,6 +470,10 @@ async def admin_ban(message: Message, bot: Bot) -> None:
     """
     Бан пользователя на определённое время или навсегда.
     """
+    # Проверка на администратора
+    if not await is_admin(bot, message.chat.id, message.from_user.id):
+        await message.reply("Только администратор может использовать эту команду.")
+        return
     try:
         if not message.reply_to_message:
             await message.reply("Ответьте на сообщение пользователя, чтобы забанить его.")
