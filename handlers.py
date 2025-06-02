@@ -155,7 +155,10 @@ async def stat(message: Message, bot: Bot) -> None:
         )
 
 @router.message(Command("set_welcome"))
-async def set_welcome(message: Message) -> None:
+async def set_welcome(message: Message, bot: Bot) -> None:
+    if not await is_admin(bot, message.chat.id, message.from_user.id):
+        await message.reply("Только администратор может использовать эту команду.")
+        return
     try:
         if message.reply_to_message and message.reply_to_message.text:
             WELCOME_MESSAGE = message.reply_to_message.text
@@ -176,7 +179,10 @@ async def set_welcome(message: Message) -> None:
         await message.reply("Приветствие не обновлено!")
 
 @router.message(Command("set_bye"))
-async def set_bye(message: Message) -> None:
+async def set_bye(message: Message, bot: Bot) -> None:
+    if not await is_admin(bot, message.chat.id, message.from_user.id):
+        await message.reply("Только администратор может использовать эту команду.")
+        return
     try:
         if message.reply_to_message and message.reply_to_message.text:
             GOODBYE_MESSAGE = message.reply_to_message.text
@@ -197,7 +203,10 @@ async def set_bye(message: Message) -> None:
         await message.reply("Прощание не обновлено!")
 
 @router.message(Command("add_button"))
-async def add_button(message: Message) -> None:
+async def add_button(message: Message, bot: Bot) -> None:
+    if not await is_admin(bot, message.chat.id, message.from_user.id):
+        await message.reply("Только администратор может использовать эту команду.")
+        return
     try:
         text = message.text.removeprefix('/add_button ').strip()
         parts = text.split('" "')
@@ -224,7 +233,10 @@ async def add_button(message: Message) -> None:
         await message.reply("Ошибка при добавлении кнопки.")
 
 @router.message(Command("del_button"))
-async def del_button(message: Message) -> None:
+async def del_button(message: Message, bot: Bot) -> None:
+    if not await is_admin(bot, message.chat.id, message.from_user.id):
+        await message.reply("Только администратор может использовать эту команду.")
+        return
     try:
         text = message.text.removeprefix('/del_button ').strip()
         q = Button_listModel.delete().where(Button_listModel.button_name == text)
@@ -451,6 +463,13 @@ async def admin_ban(message: Message, bot: Bot) -> None:
 
 @router.message()
 async def messages_counter(message: Message, bot: Bot) -> None:
+    # Фильтруем команды (сообщения, начинающиеся с "/") и удаляем их
+    if message.text and message.text.startswith("/"):
+        try:
+            await message.delete()
+        except Exception as e:
+            logger.error(f"Не удалось удалить мусорное сообщение: {e}")
+        return
     try:
         q = (
             User_listModel
