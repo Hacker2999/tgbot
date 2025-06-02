@@ -11,7 +11,7 @@ from peewee import fn
 
 from baneks_api import fetch_random_joke
 from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel
-from utils import quota_check, is_admin
+from utils import quota_check
 from config import RULES, API_TOKEN, SPAM_LIMIT, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
 
 router = Router()
@@ -320,12 +320,6 @@ async def send_links(message: Message) -> None:
             button_name = record["button_name"]
             button_link = record["button_link"]
             builder.button(text=button_name, url=button_link)
-        # Добавить кнопку с правилами (ссылка на сообщение в чате)
-        if message.chat.type in ("group", "supergroup"):
-            chat_id = message.chat.id
-            rules_url = f"https://t.me/c/{str(chat_id)[4:]}/{RULES_MESSAGE_ID}" if str(chat_id).startswith("-100") else None
-            if rules_url:
-                builder.button(text="Правила чата", url=rules_url)
         await message.reply("Ссылки:", reply_markup=builder.as_markup())
     except Exception as e:
         logger.error(f"Ошибка в send_links: {e}")
@@ -433,6 +427,10 @@ async def messages_counter(message: Message, bot: Bot) -> None:
         q.execute()
     except Exception as e:
         logger.error(f"Ошибка в messages_counter: {e}")
+
+async def is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
+    member = await bot.get_chat_member(chat_id, user_id)
+    return member.status in ("administrator", "creator")
 
 @router.message(Command("m"))
 async def admin_mute(message: Message, bot: Bot) -> None:
