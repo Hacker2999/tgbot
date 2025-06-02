@@ -7,21 +7,16 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def get_env(key: str, default: str = None, required: bool = False) -> str:
-    value = os.getenv(key, default)
-    if required and not value:
-        logger.error(f"Required environment variable '{key}' is missing!")
-    return value
+# Use the ENVIRONMENT VARIABLE NAMES below, not the values!
+API_TOKEN = "your_telegram_bot_token"
+RULES = "1. Уважать друг друга.\n2. Не флудить.\n3. Соблюдать законы."
+SPAM_LIMIT = 5  # Лимит одинаковых сообщений в минуту
 
-API_TOKEN = get_env("API_TOKEN", required=True)
-RULES = os.getenv("RULES", "1. Уважать друг друга.\n2. Не флудить.\n3. Соблюдать законы.")
-SPAM_LIMIT = int(os.getenv("SPAM_LIMIT", "5"))  # Лимит одинаковых сообщений в минуту
-
-DB_NAME = get_env("DB_NAME", required=True)
-DB_USER = get_env("DB_USER", required=True)
-DB_PASSWORD = get_env("DB_PASSWORD", required=True)
-DB_HOST = get_env("DB_HOST", required=True)
-DB_PORT = get_env("DB_PORT", required=True)
+DB_NAME = "your_db_name"
+DB_USER = "your_db_user"
+DB_PASSWORD = "your_db_password"
+DB_HOST = "your_db_host"
+DB_PORT = "your_db_port"
 
 # For local development, create a .env file and use python-dotenv to load it automatically:
 # from dotenv import load_dotenv

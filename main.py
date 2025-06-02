@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 
 def get_api_token() -> Optional[str]:
     """Get the API token from config or environment."""
-    token = API_TOKEN or os.getenv("API_TOKEN")
+    token = API_TOKEN
     if not token:
-        logger.error("API token is not set! Set API_TOKEN in config.py or as an environment variable.")
+        logger.error("API token is not set! Set API_TOKEN in config.py.")
     return token
 
 async def main() -> None:
