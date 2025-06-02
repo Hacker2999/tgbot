@@ -9,7 +9,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from peewee import fn
 
 from baneks_api import fetch_random_joke
-from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel
+from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel
 from utils import quota_check
 
 router = Router()
@@ -283,12 +283,37 @@ async def send_links(message: Message) -> None:
 
 @router.message(Command(BotCommand(command="size", description="Команда по измерению своего бубуя")))
 async def measure_size(message: Message) -> None:
-    """Send a random size message."""
+    """Send a random size message, save it for the user, and reset at the start of a new day."""
     try:
+        user_id = message.from_user.id
         username = message.from_user.first_name or message.from_user.username
+        today = datetime.now().date()
+        q = (
+            SizeModel
+            .select(SizeModel.size, SizeModel.date)
+            .where(SizeModel.user_id == user_id)
+            .first()
+        )
+        if q and q.date == today:
+            size = q.size
+        else:
+            with open("xyz.txt", "r", encoding="utf-8") as file:
+                lines = [line.strip() for line in file]
+            size = random.randint(-1, 50)
+            (
+                SizeModel
+                .insert({
+                    SizeModel.user_id: user_id,
+                    SizeModel.size: size,
+                    SizeModel.date: today
+                })
+                .on_conflict(
+                    conflict_target=[SizeModel.user_id],
+                    update={SizeModel.size: size, SizeModel.date: today}
+                )
+            ).execute()
         with open("xyz.txt", "r", encoding="utf-8") as file:
             lines = [line.strip() for line in file]
-        size = random.randint(-1, 50)
         await message.reply(f"{random.choice(lines)} у {username}'a: {size} см")
     except Exception as e:
         logger.error(f"Error in measure_size: {e}")

@@ -61,3 +61,12 @@ class Button_listModel(BaseModel):
 
     class Meta:
         table_name = 'button_list'
+
+class SizeModel(BaseModel):
+    id = BigAutoField(primary_key=True)
+    user_id = BigIntegerField(null=False, unique=True)
+    size = IntegerField(null=False)
+    date = DateField(null=False)  # The date the size was set
+
+    class Meta:
+        table_name = 'size_list'
