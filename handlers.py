@@ -2,9 +2,10 @@ import logging
 from datetime import datetime, timedelta
 import random
 import re
+import asyncio
 
 from aiogram import Router, Bot, F
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberUpdated, BotCommand, MenuButtonCommands, ChatPermissions
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberUpdated, BotCommand, MenuButtonCommands, ChatPermissions, CallbackQuery
 from aiogram.filters import Command, ChatMemberUpdatedFilter, IS_MEMBER, IS_NOT_MEMBER
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from peewee import fn
@@ -64,22 +65,87 @@ async def handle_member_join(event: ChatMemberUpdated, bot: Bot) -> None:
     except Exception as e:
         logger.error(f"Ошибка в handle_member_join: {e}")
 
+# --- Анти-рейд капча ---
+
+CAPTCHA_TIMEOUT = 120  # секунд
+CAPTCHA_ANSWERS = ["Я не бот", "Я бот", "12345"]
+
 @router.chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
 async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
     try:
-        q = (
-            TextModel
-            .select(TextModel.text_of)
-            .where(TextModel.target == "welcome_message")
-            .first()
+        user_id = event.new_chat_member.user.id
+        chat_id = event.chat.id
+        # 1. Ограничить права пользователя (только чтение)
+        await bot.restrict_chat_member(
+            chat_id=chat_id,
+            user_id=user_id,
+            permissions=ChatPermissions(can_send_messages=False)
         )
-        WELCOME_MESSAGE = q.text_of if q else "Добро пожаловать!"
-        await bot.send_message(
-            chat_id=event.chat.id,
-            text=f"{WELCOME_MESSAGE}, {event.new_chat_member.user.first_name}!"
+        # 2. Сгенерировать капчу
+        answers = CAPTCHA_ANSWERS.copy()
+        random.shuffle(answers)
+        correct = "Я не бот"
+        builder = InlineKeyboardBuilder()
+        for ans in answers:
+            builder.button(text=ans, callback_data=f"captcha_{ans}_{user_id}")
+        markup = builder.as_markup()
+        # 3. Отправить капчу
+        captcha_msg = await bot.send_message(
+            chat_id=chat_id,
+            text=f"<b>Привет, {event.new_chat_member.user.first_name}!</b>\nПодтвердите, что вы не бот, нажав на правильную кнопку ниже. У вас 2 минуты.",
+            reply_markup=markup,
+            parse_mode="HTML"
         )
+        # 4. Ждать прохождения капчи
+        async def captcha_timeout():
+            await asyncio.sleep(CAPTCHA_TIMEOUT)
+            # Проверить, сняты ли ограничения
+            member = await bot.get_chat_member(chat_id, user_id)
+            if member.can_send_messages is False:
+                try:
+                    await bot.ban_chat_member(chat_id, user_id)
+                    await bot.unban_chat_member(chat_id, user_id)  # кик
+                    await bot.send_message(chat_id, f"Пользователь {event.new_chat_member.user.first_name} не прошёл капчу и был удалён.")
+                except Exception as e:
+                    logger.error(f"Ошибка при кике за не пройденную капчу: {e}")
+        asyncio.create_task(captcha_timeout())
     except Exception as e:
-        logger.error(f"Ошибка в handle_user_join: {e}")
+        logger.error(f"Ошибка в handle_user_join (captcha): {e}")
+
+@router.callback_query(F.data.startswith("captcha_"))
+async def captcha_callback(call: CallbackQuery, bot: Bot) -> None:
+    try:
+        data = call.data.split("_")
+        answer = data[1]
+        user_id = int(data[2])
+        if call.from_user.id != user_id:
+            await call.answer("Это не ваша капча!", show_alert=True)
+            return
+        chat_id = call.message.chat.id
+        if answer == "Я не бот":
+            # Снять ограничения
+            await bot.restrict_chat_member(
+                chat_id=chat_id,
+                user_id=user_id,
+                permissions=ChatPermissions(can_send_messages=True, can_send_media_messages=True, can_send_other_messages=True, can_add_web_page_previews=True)
+            )
+            await call.message.edit_text("✅ Капча пройдена! Добро пожаловать!")
+            # Отправить приветственное сообщение из базы
+            q = (
+                TextModel
+                .select(TextModel.text_of)
+                .where(TextModel.target == "welcome_message")
+                .first()
+            )
+            WELCOME_MESSAGE = q.text_of if q else "Добро пожаловать!"
+            await bot.send_message(
+                chat_id=chat_id,
+                text=f"{WELCOME_MESSAGE}, {call.from_user.first_name}!"
+            )
+        else:
+            await call.answer("Неверно! Попробуйте ещё раз.", show_alert=True)
+    except Exception as e:
+        logger.error(f"Ошибка в captcha_callback: {e}")
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_MEMBER >> IS_NOT_MEMBER))
 async def handle_member_leave(event: ChatMemberUpdated, bot: Bot) -> None:
@@ -315,7 +381,7 @@ async def measure_size(message: Message) -> None:
         with open("xyz.txt", "r", encoding="utf-8") as file:
             lines = [line.strip() for line in file]
         dick_name = random.choice(lines)
-        await message.reply(f"{dick_name} {username}: {size} см")
+        await message.reply(f"{dick_name} {username}'а: {size} см")
     except Exception as e:
         logger.error(f"Ошибка в measure_size: {e}")
         await message.reply("Ошибка при измерении размера.")
