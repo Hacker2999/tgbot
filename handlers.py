@@ -120,6 +120,24 @@ async def handle_member_join(event: ChatMemberUpdated, bot: Bot) -> None:
     except Exception as e:
         logger.error(f"Ошибка в handle_member_join: {e}")
 
+@router.chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
+async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
+    logger.info(f"User joined: {event.from_user.id}")
+    try:
+        q = (
+            TextModel
+            .select(TextModel.text_of)
+            .where(TextModel.target == "welcome_message")
+            .first()
+        )
+        WELCOME_MESSAGE = q.text_of if q else "Добро пожаловать!"
+        await bot.send_message(
+            chat_id=event.chat.id,
+            text=f"{WELCOME_MESSAGE}, {event.from_user.first_name}!"
+        )
+    except Exception as e:
+        logger.error(f"Ошибка в handle_user_join: {e}")
+
 @router.chat_member(ChatMemberUpdatedFilter(IS_MEMBER >> IS_NOT_MEMBER))
 async def handle_member_leave(event: ChatMemberUpdated, bot: Bot) -> None:
     logger.debug(f"handle_member_leave: event={event}")
