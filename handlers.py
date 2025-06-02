@@ -40,14 +40,14 @@ RULES_MESSAGE_ID = 1  # TODO: Установите сюда реальный ID 
 
 def parse_time_arg(arg: str) -> timedelta:
     logger.debug(f"parse_time_arg: arg={arg}")
-    match = re.match(r"(\d+)\s*(min|h|d|w|m|y)?", arg)
+    match = re.match(r"(\d+)\s*(min|m|h|d|w|y|mo|mon)?", arg)
     if not match:
         logger.warning(f"parse_time_arg: не удалось распознать аргумент времени: {arg}")
         return None
     value, unit = match.groups()
     value = int(value)
     logger.debug(f"parse_time_arg: value={value}, unit={unit}")
-    if unit == "min":
+    if unit in ("min", "m"):
         return timedelta(minutes=value)
     elif unit == "h":
         return timedelta(hours=value)
@@ -55,7 +55,7 @@ def parse_time_arg(arg: str) -> timedelta:
         return timedelta(days=value)
     elif unit == "w":
         return timedelta(weeks=value)
-    elif unit == "m":
+    elif unit in ("mo", "mon"):
         return timedelta(days=30*value)
     elif unit == "y":
         return timedelta(days=365*value)
