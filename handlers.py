@@ -374,7 +374,6 @@ async def measure_size(message: Message) -> None:
             # Новый диапазон: 5..50
             base = 5
             max_size = 50
-            import random
             random_part = random.randint(0, 5)
             size = int(base + (max_size - base) * luck + random_part)
             if size > max_size:
