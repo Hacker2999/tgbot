@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import random
 import re
 import asyncio
+import hashlib
 
 from aiogram import Router, Bot, F
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberUpdated, BotCommand, MenuButtonCommands, ChatPermissions, CallbackQuery
@@ -366,7 +367,18 @@ async def measure_size(message: Message) -> None:
         if q and q.date == today:
             size = q.size
         else:
-            size = random.randint(4, 100)
+            # Удача: хэш от user_id и даты, нормализуем в диапазон 0..1
+            luck_seed = f"{user_id}_{today}".encode()
+            luck_hash = hashlib.sha256(luck_seed).hexdigest()
+            luck = int(luck_hash[:8], 16) / 0xFFFFFFFF
+            # Новый диапазон: 5..50
+            base = 5
+            max_size = 50
+            import random
+            random_part = random.randint(0, 5)
+            size = int(base + (max_size - base) * luck + random_part)
+            if size > max_size:
+                size = max_size
             (
                 SizeModel
                 .insert({
@@ -382,7 +394,7 @@ async def measure_size(message: Message) -> None:
         with open("xyz.txt", "r", encoding="utf-8") as file:
             lines = [line.strip() for line in file]
         dick_name = random.choice(lines)
-        await message.reply(f"{dick_name} {username}'а: {size} см")
+        await message.reply(f"{dick_name} {username}: {size} см")
     except Exception as e:
         logger.error(f"Ошибка в measure_size: {e}")
         await message.reply("Ошибка при измерении размера.")
