@@ -5,6 +5,7 @@ from aiogram.types import Message
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Dict
+import time
 
 from model import BanList
 
@@ -29,18 +30,25 @@ class AntiSpamMiddleware(BaseMiddleware):
         self.spam_limit = spam_limit  # Лимит одинаковых сообщений в минуту
         self.user_messages: Dict[int, list] = defaultdict(list)  # user_id -> [(datetime, content_id)]
         self.user_penalties: Dict[int, int] = defaultdict(int)  # user_id -> количество наказаний
+        self.admins_cache: Dict[int, tuple] = {}  # chat_id -> (timestamp, set(admin_ids))
         super().__init__()
 
     async def is_admin(self, bot: Bot, chat_id: int, user_id: int) -> bool:
-        """Проверить, является ли пользователь админом в чате."""
-        try:
-            chat_admins = await bot.get_chat_administrators(chat_id)
-            return any(admin.user.id == user_id for admin in chat_admins)
-        except TelegramBadRequest:
-            return False
-        except Exception as e:
-            logger.error(f"Ошибка при проверке статуса администратора: {e}")
-            return False
+        now = time.time()
+        cache = self.admins_cache.get(chat_id)
+        if cache and now - cache[0] < 60:  # 60 секунд кэш
+            admin_ids = cache[1]
+        else:
+            try:
+                chat_admins = await bot.get_chat_administrators(chat_id)
+                admin_ids = {admin.user.id for admin in chat_admins}
+                self.admins_cache[chat_id] = (now, admin_ids)
+            except TelegramBadRequest:
+                return False
+            except Exception as e:
+                logger.error(f"Ошибка при проверке статуса администратора: {e}")
+                return False
+        return user_id in admin_ids
 
     async def __call__(
         self,

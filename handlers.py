@@ -101,7 +101,8 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
             await asyncio.sleep(CAPTCHA_TIMEOUT)
             # Проверить, сняты ли ограничения
             member = await bot.get_chat_member(chat_id, user_id)
-            if member.can_send_messages is False:
+            # Проверяем статус и права
+            if getattr(member, 'status', None) == 'restricted' and getattr(member, 'can_send_messages', True) is False:
                 try:
                     await bot.ban_chat_member(chat_id, user_id)
                     await bot.unban_chat_member(chat_id, user_id)  # кик
