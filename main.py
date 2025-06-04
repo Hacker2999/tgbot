@@ -9,6 +9,7 @@ from config import API_TOKEN, CHANNEL_CHAT_ID
 from handlers import router
 from middleware import AntiSpamMiddleware
 from model import Chat_listModel
+from ignore_old_messages import IgnoreOldMessagesMiddleware
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -39,6 +40,7 @@ async def main() -> None:
     bot = Bot(token=token)
     dp = Dispatcher()
     dp.include_router(router)
+    dp.message.middleware(IgnoreOldMessagesMiddleware())
     dp.message.middleware(AntiSpamMiddleware())
 
     stop_event = asyncio.Event()
