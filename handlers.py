@@ -416,7 +416,7 @@ async def size_top(message: Message, bot: Bot) -> None:
     for idx, row in enumerate(results, 1):
         try:
             user = await bot.get_chat_member(message.chat.id, row.user_id)
-            name = user.user.first_name
+            name = user.user.username
         except Exception:
             name = f"ID {row.user_id}"
         medal = medals[idx-1] if idx <= 3 else f"{idx}."
