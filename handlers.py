@@ -479,7 +479,7 @@ async def roulette(message: Message, bot: Bot) -> None:
         # 1. Бот выбирает условие (больше или меньше)
         condition = random.choice(["больше", "меньше"])
         border = random.randint(2, 5)  # 2-5, чтобы не было слишком просто
-        await message.reply(f"Выпадет {condition} {border} 🎲\nКидаем кубик...")
+        await message.reply(f"Если выпадет {condition} {border}, то победа 🎲\nКидаем кубик...")
         # 2. Кидаем кубик (анимированный)
         dice_msg = await bot.send_dice(message.chat.id, emoji="🎲")
         dice_value = dice_msg.dice.value  # 1-6
