@@ -419,7 +419,7 @@ async def size_top(message: Message, bot: Bot) -> None:
             name = user.user.username
         except Exception:
             name = f"ID {row.user_id}"
-        medal = medals[idx-1] if idx <= 3 else f"{idx}."
+        medal = medals[idx-1] if idx <= 3 else f"   {idx}."
         lines.append(f"{medal} <b>{name}</b> — <b>{row.size} см</b>")
     text = "<b>🏆 Турнирная таблица размеров за сегодня:</b>\n\n" + "\n".join(lines)
     await message.reply(text, parse_mode="HTML")
