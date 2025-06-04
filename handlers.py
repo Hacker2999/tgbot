@@ -464,6 +464,47 @@ async def i_want_anekdot(message: Message) -> None:
         logger.error(f"Ошибка в i_want_anekdot: {e}")
         await message.reply("Ошибка при получении анекдота.")
 
+@router.message(Command("roulette"))
+async def roulette(message: Message, bot: Bot) -> None:
+    try:
+        # Парсим ставку (минуты мута)
+        args = message.text.split()
+        if len(args) < 2 or not args[1].isdigit():
+            await message.reply("Использование: /roulette <минуты мута>")
+            return
+        mute_minutes = int(args[1])
+        if mute_minutes < 1 or mute_minutes > 1440:
+            await message.reply("Укажите количество минут от 1 до 1440.")
+            return
+        # 1. Бот выбирает условие (больше или меньше)
+        condition = random.choice(["больше", "меньше"])
+        border = random.randint(2, 5)  # 2-5, чтобы не было слишком просто
+        await message.reply(f"Выпадет {condition} {border} 🎲\nКидаем кубик...")
+        # 2. Кидаем кубик (анимированный)
+        dice_msg = await bot.send_dice(message.chat.id, emoji="🎲")
+        dice_value = dice_msg.dice.value  # 1-6
+        # 3. Проверяем результат
+        win = (dice_value > border) if condition == "больше" else (dice_value < border)
+        if win:
+            await message.reply("see you Space Cowboy")
+        else:
+            # Мутим пользователя
+            until_date = datetime.now() + timedelta(minutes=mute_minutes)
+            try:
+                await bot.restrict_chat_member(
+                    chat_id=message.chat.id,
+                    user_id=message.from_user.id,
+                    permissions=ChatPermissions(can_send_messages=False),
+                    until_date=until_date
+                )
+                await message.reply("Dont be looser, buy разработчику бота банку monster energy")
+            except Exception as e:
+                await message.reply("Ошибка при попытке замутить пользователя. Проверьте права бота.")
+                logger.error(f"Ошибка в roulette mute: {e}")
+    except Exception as e:
+        logger.error(f"Ошибка в roulette: {e}")
+        await message.reply("Ошибка в игре рулетка.")
+
 # --- Админ-команды ---
 
 async def is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
