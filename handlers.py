@@ -107,7 +107,7 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
                 try:
                     await bot.ban_chat_member(chat_id, user_id)
                     await bot.unban_chat_member(chat_id, user_id)  # кик
-                    await bot.send_message(chat_id, f"Пользователь {event.new_chat_member.user.first_name} не прошёл капчу и был удалён.")
+                    await bot.send_message(chat_id, f"Пользователь {event.new_chat_member.user.username} не прошёл капчу и был удалён.")
                 except Exception as e:
                     logger.error(f"Ошибка при кике за не пройденную капчу: {e}")
         asyncio.create_task(captcha_timeout())
@@ -142,7 +142,7 @@ async def captcha_callback(call: CallbackQuery, bot: Bot) -> None:
             WELCOME_MESSAGE = q.text_of if q else "Добро пожаловать!"
             await bot.send_message(
                 chat_id=chat_id,
-                text=f"{WELCOME_MESSAGE}, {call.from_user.first_name}!"
+                text=f"{WELCOME_MESSAGE}, {call.from_user.username}!"
             )
         else:
             await call.answer("Неверно! Попробуйте ещё раз.", show_alert=True)
@@ -173,7 +173,7 @@ async def handle_member_leave(event: ChatMemberUpdated, bot: Bot) -> None:
             await bot.send_message(
                 chat_id=event.chat.id,
                 text=(
-                    f"{GOODBYE_MESSAGE}, {event.old_chat_member.user.first_name}!\n"
+                    f"{GOODBYE_MESSAGE}, {event.old_chat_member.user.username}!\n"
                     f"Сообщений: {q2.message_count}\n"
                     f"Был с нами: {days} дн., {hours} ч., {minutes} мин."
                 )
@@ -181,7 +181,7 @@ async def handle_member_leave(event: ChatMemberUpdated, bot: Bot) -> None:
         else:
             await bot.send_message(
                 chat_id=event.chat.id,
-                text=f"{GOODBYE_MESSAGE}, {event.old_chat_member.user.first_name}! Легенды не умирают."
+                text=f"{GOODBYE_MESSAGE}, {event.old_chat_member.user.username}"
             )
     except Exception as e:
         logger.error(f"Ошибка в handle_member_leave: {e}")
@@ -205,7 +205,7 @@ async def stat(message: Message, bot: Bot) -> None:
             await bot.send_message(
                 chat_id=message.chat.id,
                 text=(
-                    f"Статистика для {message.from_user.first_name}:\n"
+                    f"Статистика для {message.from_user.username}:\n"
                     f"Сообщений: {q.message_count}\n"
                     f"С нами: {days} дн., {hours} ч., {minutes} мин."
                 )
@@ -356,7 +356,7 @@ async def send_links(message: Message) -> None:
 async def measure_size(message: Message) -> None:
     try:
         user_id = message.from_user.id
-        username = message.from_user.first_name or message.from_user.username
+        username = message.from_user.username
         today = datetime.now().date()
         q = (
             SizeModel
@@ -371,7 +371,6 @@ async def measure_size(message: Message) -> None:
             luck_seed = f"{user_id}_{today}".encode()
             luck_hash = hashlib.sha256(luck_seed).hexdigest()
             luck = int(luck_hash[:8], 16) / 0xFFFFFFFF
-            # Новый диапазон: 5..50
             base = 5
             max_size = 50
             random_part = random.randint(0, 5)
@@ -486,7 +485,7 @@ async def roulette(message: Message, bot: Bot) -> None:
         # 3. Проверяем результат
         win = (dice_value > border) if condition == "больше" else (dice_value < border)
         if win:
-            await message.reply("see you Space Cowboy")
+            await message.reply("Победа за вами")
         else:
             # Мутим пользователя
             until_date = datetime.now() + timedelta(minutes=mute_minutes)
@@ -497,9 +496,9 @@ async def roulette(message: Message, bot: Bot) -> None:
                     permissions=ChatPermissions(can_send_messages=False),
                     until_date=until_date
                 )
-                await message.reply("Dont be looser, buy разработчику бота банку monster energy")
+                await message.reply("Для быстрого снятия мута, вложитесь в хостинг")
             except Exception as e:
-                await message.reply("Ошибка при попытке замутить пользователя. Проверьте права бота.")
+                await message.reply("Ошибка при попытке замутить пользователя. Проверьте права бота или не играйте будучи админом.")
                 logger.error(f"Ошибка в roulette mute: {e}")
     except Exception as e:
         logger.error(f"Ошибка в roulette: {e}")
@@ -554,8 +553,8 @@ async def admin_mute(message: Message, bot: Bot) -> None:
             await message.reply("Ответьте на сообщение пользователя, чтобы замутить его.")
             return
         user_id = message.reply_to_message.from_user.id
-        admin_name = message.from_user.first_name
-        muted_name = message.reply_to_message.from_user.first_name
+        muted_name = message.reply_to_message.from_user.username
+        admin_name = message.from_user.username
         args = message.text.split(maxsplit=1)
         duration = None
         if len(args) > 1:
@@ -570,7 +569,7 @@ async def admin_mute(message: Message, bot: Bot) -> None:
         time_str = f"на {args[1]}" if len(args) > 1 else "навсегда"
         unmute_time = until_date.strftime('%d.%m.%Y %H:%M') if duration else '∞'
         await message.reply(
-            f"Пользователь <b>{muted_name}</b> (id: <code>{user_id}</code>) был замучен админом <b>{admin_name}</b> (id: <code>{message.from_user.id}</code>) {time_str}.\n"
+            f"Пользователь <b>{muted_name}</b> был замучен админом <b>{admin_name}</b> {time_str}.\n"
             f"Размут: <b>{unmute_time}</b>",
             parse_mode="HTML"
         )
@@ -588,8 +587,8 @@ async def admin_ban(message: Message, bot: Bot) -> None:
             await message.reply("Ответьте на сообщение пользователя, чтобы забанить его.")
             return
         user_id = message.reply_to_message.from_user.id
-        admin_name = message.from_user.first_name
-        banned_name = message.reply_to_message.from_user.first_name
+        admin_name = message.from_user.username
+        banned_name = message.reply_to_message.from_user.username
         args = message.text.split(maxsplit=1)
         duration = None
         if len(args) > 1:
@@ -603,7 +602,7 @@ async def admin_ban(message: Message, bot: Bot) -> None:
         time_str = f"на {args[1]}" if len(args) > 1 else "навсегда"
         unban_time = until_date.strftime('%d.%m.%Y %H:%M') if duration else '∞'
         await message.reply(
-            f"Пользователь <b>{banned_name}</b> (id: <code>{user_id}</code>) был забанен админом <b>{admin_name}</b> (id: <code>{message.from_user.id}</code>) {time_str}.\n"
+            f"Пользователь <b>{banned_name}</b> был забанен админом <b>{admin_name}</b> {time_str}.\n"
             f"Разбан: <b>{unban_time}</b>",
             parse_mode="HTML"
         )
