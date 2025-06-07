@@ -205,7 +205,7 @@ async def handle_member_leave(event: ChatMemberUpdated, bot: Bot) -> None:
             await bot.send_message(
                 chat_id=event.chat.id,
                 text=(
-                    f"{GOODBYE_MESSAGE}, {event.old_chat_member.user.username}!\n"
+                    f"{event.old_chat_member.user.username}, {GOODBYE_MESSAGE}\n"
                     f"Сообщений: {q2.message_count}\n"
                     f"Был с нами: {days} дн., {hours} ч., {minutes} мин."
                 )
