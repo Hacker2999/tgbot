@@ -40,7 +40,7 @@ async def main() -> None:
     bot = Bot(token=token)
     dp = Dispatcher()
     dp.include_router(router)
-    dp.message.middleware(IgnoreOldMessagesMiddleware())
+    dp.update.middleware(IgnoreOldMessagesMiddleware())
     dp.message.middleware(AntiSpamMiddleware())
 
     stop_event = asyncio.Event()
