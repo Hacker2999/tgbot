@@ -174,7 +174,7 @@ async def captcha_callback(call: CallbackQuery, bot: Bot) -> None:
             WELCOME_MESSAGE = q.text_of if q else "Добро пожаловать!"
             await bot.send_message(
                 chat_id=chat_id,
-                text=f"{WELCOME_MESSAGE}, {call.from_user.username}!"
+                text=f"{call.from_user.username},{WELCOME_MESSAGE} !"
             )
         else:
             await call.answer("Неверно! Попробуйте ещё раз.", show_alert=True)
