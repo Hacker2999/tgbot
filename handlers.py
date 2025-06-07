@@ -76,13 +76,43 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
     try:
         user_id = event.new_chat_member.user.id
         chat_id = event.chat.id
-        # 1. Ограничить права пользователя (только чтение)
+        # Проверяем, был ли пользователь уже в чате (например, вернулся после выхода)
+        member = await bot.get_chat_member(chat_id, user_id)
+        if getattr(member, 'status', None) not in ("left", "kicked"):
+            # Пользователь уже был в чате, не показываем капчу, просто выставляем is_verified=True
+            (
+                User_listModel
+                .insert({
+                    User_listModel.created_at: fn.now(),
+                    User_listModel.user_id: user_id,
+                    User_listModel.is_verified: True
+                })
+                .on_conflict(
+                    conflict_target=[User_listModel.user_id],
+                    update={User_listModel.is_verified: True, User_listModel.created_at: fn.now()}
+                )
+            ).execute()
+            return  # Не показываем капчу
+        # 1. Обновить/создать запись пользователя с is_verified=False
+        (
+            User_listModel
+            .insert({
+                User_listModel.created_at: fn.now(),
+                User_listModel.user_id: user_id,
+                User_listModel.is_verified: False
+            })
+            .on_conflict(
+                conflict_target=[User_listModel.user_id],
+                update={User_listModel.is_verified: False, User_listModel.created_at: fn.now()}
+            )
+        ).execute()
+        # 2. Ограничить права пользователя (только чтение)
         await bot.restrict_chat_member(
             chat_id=chat_id,
             user_id=user_id,
             permissions=ChatPermissions(can_send_messages=False)
         )
-        # 2. Сгенерировать капчу
+        # 3. Сгенерировать капчу
         answers = CAPTCHA_ANSWERS.copy()
         random.shuffle(answers)
         correct = "Я не бот"
@@ -90,20 +120,20 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
         for ans in answers:
             builder.button(text=ans, callback_data=f"captcha_{ans}_{user_id}")
         markup = builder.as_markup()
-        # 3. Отправить капчу
+        # 4. Отправить капчу
         captcha_msg = await bot.send_message(
             chat_id=chat_id,
-            text=f"<b>Привет, {event.new_chat_member.user.first_name}!</b>\nПодтвердите, что вы не бот, нажав на правильную кнопку ниже. У вас 2 минуты.",
+            text=f"<b>Привет, {event.new_chat_member.user.first_name}!"\
+                "</b>\nПодтвердите, что вы не бот, нажав на правильную кнопку ниже. У вас 2 минуты.",
             reply_markup=markup,
             parse_mode="HTML"
         )
-        # 4. Ждать прохождения капчи
+        # 5. Ждать прохождения капчи
         async def captcha_timeout():
             await asyncio.sleep(CAPTCHA_TIMEOUT)
-            # Проверить, сняты ли ограничения
-            member = await bot.get_chat_member(chat_id, user_id)
-            # Проверяем статус и права
-            if getattr(member, 'status', None) == 'restricted' and getattr(member, 'can_send_messages', True) is False:
+            # Проверить статус верификации
+            user = User_listModel.select(User_listModel.is_verified).where(User_listModel.user_id == user_id).first()
+            if not user or not user.is_verified:
                 try:
                     await bot.ban_chat_member(chat_id, user_id)
                     await bot.unban_chat_member(chat_id, user_id)  # кик
@@ -131,6 +161,8 @@ async def captcha_callback(call: CallbackQuery, bot: Bot) -> None:
                 user_id=user_id,
                 permissions=ChatPermissions(can_send_messages=True, can_send_media_messages=True, can_send_other_messages=True, can_add_web_page_previews=True)
             )
+            # Обновить is_verified=True
+            User_listModel.update({User_listModel.is_verified: True}).where(User_listModel.user_id == user_id).execute()
             await call.message.edit_text("✅ Капча пройдена! Добро пожаловать!")
             # Отправить приветственное сообщение из базы
             q = (
@@ -466,6 +498,7 @@ async def i_want_anekdot(message: Message) -> None:
 @router.message(Command("roulette"))
 async def roulette(message: Message, bot: Bot) -> None:
     try:
+        # Эта команда не трогает поле is_verified, только мутит пользователя
         # Парсим ставку (минуты мута)
         args = message.text.split()
         if len(args) < 2 or not args[1].isdigit():
@@ -545,6 +578,7 @@ async def is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
 
 @router.message(Command("m"))
 async def admin_mute(message: Message, bot: Bot) -> None:
+    # Эта команда не трогает поле is_verified, только мутит пользователя
     if not await is_admin(bot, message.chat.id, message.from_user.id):
         await message.reply("Только администратор может использовать эту команду.")
         return

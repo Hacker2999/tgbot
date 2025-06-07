@@ -42,6 +42,7 @@ class User_listModel(BaseModel):
     created_at = TimestampField(constraints=[SQL('DEFAULT now()')])
     user_id = BigIntegerField(null=False,unique=True)
     message_count = BigIntegerField(default=0)
+    is_verified = BooleanField(default=False)  # Прошел ли пользователь капчу
 
     class Meta:
         table_name = 'user_list'
