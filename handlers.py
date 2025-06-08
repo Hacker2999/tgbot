@@ -175,7 +175,7 @@ async def captcha_callback(call: CallbackQuery, bot: Bot) -> None:
             WELCOME_MESSAGE = q.text_of if q else "Добро пожаловать!"
             await bot.send_message(
                 chat_id=chat_id,
-                text=f"{WELCOME_MESSAGE}, {call.from_user.username}!"
+                text=f"{call.from_user.username},{WELCOME_MESSAGE} !"
             )
         else:
             await call.answer("Неверно! Попробуйте ещё раз.", show_alert=True)
@@ -206,7 +206,7 @@ async def handle_member_leave(event: ChatMemberUpdated, bot: Bot) -> None:
             await bot.send_message(
                 chat_id=event.chat.id,
                 text=(
-                    f"{GOODBYE_MESSAGE}, {event.old_chat_member.user.username}!\n"
+                    f"{event.old_chat_member.user.username}, {GOODBYE_MESSAGE}\n"
                     f"Сообщений: {q2.message_count}\n"
                     f"Был с нами: {days} дн., {hours} ч., {minutes} мин."
                 )
