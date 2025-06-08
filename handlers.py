@@ -6,7 +6,7 @@ import asyncio
 import hashlib
 
 from aiogram import Router, Bot, F
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberUpdated, BotCommand, MenuButtonCommands, ChatPermissions, CallbackQuery, ChatType
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberUpdated, BotCommand, MenuButtonCommands, ChatPermissions, CallbackQuery
 from aiogram.filters import Command, ChatMemberUpdatedFilter, IS_MEMBER, IS_NOT_MEMBER
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from peewee import fn
@@ -18,8 +18,6 @@ from config import RULES, API_TOKEN, SPAM_LIMIT, DB_NAME, DB_USER, DB_PASSWORD, 
 
 router = Router()
 logger = logging.getLogger(__name__)
-
-SECRET_KILL_PASSWORD = "aboba123"  # Задайте свой пароль здесь
 
 # --- Вспомогательные функции ---
 def parse_time_arg(arg: str) -> timedelta:
