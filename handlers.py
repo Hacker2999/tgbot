@@ -119,10 +119,11 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
         for ans in answers:
             builder.button(text=ans, callback_data=f"captcha_{ans}_{user_id}")
         markup = builder.as_markup()
+        username = event.new_chat_member.user.username if event.new_chat_member.user.username is not None else event.new_chat_member.user.first_name
         # 4. Отправить капчу
         captcha_msg = await bot.send_message(
             chat_id=chat_id,
-            text=f"<b>Привет, {event.new_chat_member.user.first_name}!"\
+            text=f"<b>Привет, {username}!</b>!"\
                 "</b>\nПодтвердите, что вы не бот, нажав на правильную кнопку ниже. У вас 2 минуты.",
             reply_markup=markup,
             parse_mode="HTML"
@@ -132,11 +133,12 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
             await asyncio.sleep(CAPTCHA_TIMEOUT)
             # Проверить статус верификации
             user = User_listModel.select(User_listModel.is_verified).where(User_listModel.user_id == user_id).first()
+            username = event.new_chat_member.user.username if event.new_chat_member.user.username is not None else event.new_chat_member.user.first_name
             if not user or not user.is_verified:
                 try:
                     await bot.ban_chat_member(chat_id, user_id)
                     await bot.unban_chat_member(chat_id, user_id)  # кик
-                    await bot.send_message(chat_id, f"Пользователь {event.new_chat_member.user.username} не прошёл капчу и был удалён.")
+                    await bot.send_message(chat_id, f"Пользователь {username} не прошёл капчу и был удалён.")
                 except Exception as e:
                     logger.error(f"Ошибка при кике за не пройденную капчу: {e}")
         asyncio.create_task(captcha_timeout())
@@ -171,9 +173,10 @@ async def captcha_callback(call: CallbackQuery, bot: Bot) -> None:
                 .first()
             )
             WELCOME_MESSAGE = q.text_of if q else "Добро пожаловать!"
+            username = call.from_user.username if call.from_user.username is not None else call.from_user.first_name
             await bot.send_message(
                 chat_id=chat_id,
-                text=f"{call.from_user.username},{WELCOME_MESSAGE} !"
+                text=f"{username},{WELCOME_MESSAGE} !"
             )
         else:
             await call.answer("Неверно! Попробуйте ещё раз.", show_alert=True)
@@ -183,6 +186,7 @@ async def captcha_callback(call: CallbackQuery, bot: Bot) -> None:
 @router.chat_member(ChatMemberUpdatedFilter(IS_MEMBER >> IS_NOT_MEMBER))
 async def handle_member_leave(event: ChatMemberUpdated, bot: Bot) -> None:
     try:
+        username = event.old_chat_member.user.username if event.old_chat_member.user.username is not None else event.old_chat_member.user.first_name
         q = (
             TextModel
             .select(TextModel.text_of)
@@ -201,10 +205,11 @@ async def handle_member_leave(event: ChatMemberUpdated, bot: Bot) -> None:
             days = time_withus.days
             hours = time_withus.seconds // 3600
             minutes = (time_withus.seconds % 3600) // 60
+
             await bot.send_message(
                 chat_id=event.chat.id,
                 text=(
-                    f"{event.old_chat_member.user.username}, {GOODBYE_MESSAGE}\n"
+                    f"{username}, {GOODBYE_MESSAGE}\n"
                     f"Сообщений: {q2.message_count}\n"
                     f"Был с нами: {days} дн., {hours} ч., {minutes} мин."
                 )
@@ -212,7 +217,7 @@ async def handle_member_leave(event: ChatMemberUpdated, bot: Bot) -> None:
         else:
             await bot.send_message(
                 chat_id=event.chat.id,
-                text=f"{GOODBYE_MESSAGE}, {event.old_chat_member.user.username}"
+                text=f"{username}, {GOODBYE_MESSAGE}"
             )
     except Exception as e:
         logger.error(f"Ошибка в handle_member_leave: {e}")
@@ -233,10 +238,11 @@ async def stat(message: Message, bot: Bot) -> None:
             days = time_withus.days
             hours = time_withus.seconds // 3600
             minutes = (time_withus.seconds % 3600) // 60
+            username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
             await bot.send_message(
                 chat_id=message.chat.id,
                 text=(
-                    f"Статистика для {message.from_user.username}:\n"
+                    f"Статистика для {username}:\n"
                     f"Сообщений: {q.message_count}\n"
                     f"С нами: {days} дн., {hours} ч., {minutes} мин."
                 )
@@ -307,25 +313,29 @@ async def add_button(message: Message, bot: Bot) -> None:
         await message.reply("Только администратор может использовать эту команду.")
         return
     try:
-        text = message.text.removeprefix('/add_button ').strip()
-        parts = text.split('" "')
-        button_name = parts[0].strip('"')
-        link = parts[1].strip('"')
-        q = (
-            Button_listModel
-            .insert({
-                Button_listModel.button_name: button_name,
-                Button_listModel.button_link: link,
-            })
-            .on_conflict(
-                conflict_target=[Button_listModel.button_link],
-                update={
+        text = re.sub(r'^/add_button\S*\s', '', message.text).strip()
+        parts = text.split(' - ')
+        button_name = parts[0]
+        link = parts[1]
+        if link.startswith("https://"):
+            q = (
+                Button_listModel
+                .insert({
                     Button_listModel.button_name: button_name,
                     Button_listModel.button_link: link,
-                }
+                })
+                .on_conflict(
+                    conflict_target=[Button_listModel.button_link],
+                    update={
+                        Button_listModel.button_name: button_name,
+                        Button_listModel.button_link: link,
+                    }
+                )
             )
-        )
-        q.execute()
+            q.execute()
+        else:
+            await message.reply("Ошибка при добавлении кнопки. Неправильный формат ссылки")
+            return
         await message.reply(f"Добавлена кнопка: {button_name}")
     except Exception as e:
         logger.error(f"Ошибка в add_button: {e}")
@@ -337,7 +347,7 @@ async def del_button(message: Message, bot: Bot) -> None:
         await message.reply("Только администратор может использовать эту команду.")
         return
     try:
-        text = message.text.removeprefix('/del_button ').strip()
+        text = re.sub(r'^/del_button\S*\s', '', message.text).strip()
         q = Button_listModel.delete().where(Button_listModel.button_name == text)
         q.execute()
         await message.reply(f"Удалена кнопка: {text}")
@@ -378,6 +388,7 @@ async def send_links(message: Message) -> None:
             button_name = record["button_name"]
             button_link = record["button_link"]
             builder.button(text=button_name, url=button_link)
+            builder.adjust(1)
         await message.reply("Ссылки:", reply_markup=builder.as_markup())
     except Exception as e:
         logger.error(f"Ошибка в send_links: {e}")
@@ -387,7 +398,7 @@ async def send_links(message: Message) -> None:
 async def measure_size(message: Message) -> None:
     try:
         user_id = message.from_user.id
-        username = message.from_user.username
+        username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
         today = datetime.now().date()
         q = (
             SizeModel
@@ -446,10 +457,10 @@ async def size_top(message: Message, bot: Bot) -> None:
     for idx, row in enumerate(results, 1):
         try:
             user = await bot.get_chat_member(message.chat.id, row.user_id)
-            name = user.user.username
+            name = user.user.username if user.user.username is not None else user.user.first_name
         except Exception:
             name = f"ID {row.user_id}"
-        medal = medals[idx-1] if idx <= 3 else f"   {idx}."
+        medal = medals[idx-1] if idx <= 3 else f"  {idx}."
         lines.append(f"{medal} <b>{name}</b> — <b>{row.size} см</b>")
     text = "<b>🏆 Турнирная таблица размеров за сегодня:</b>\n\n" + "\n".join(lines)
     await message.reply(text, parse_mode="HTML")
@@ -554,8 +565,8 @@ async def help_command(message: Message) -> None:
         "<b>🛠️ Админ-команды:</b>\n"
         "<b>/set_welcome</b> — Изменить приветствие (ответом на сообщение или текстом)\n"
         "<b>/set_bye</b> — Изменить прощание (ответом на сообщение или текстом)\n"
-        "<b>/add_button</b> — Добавить кнопку в /links. Пример: <code>/add_button &quot;Название&quot; &quot;https://ссылка&quot;</code>\n"
-        "<b>/del_button</b> — Удалить кнопку из /links. Пример: <code>/del_button &quot;Название&quot;</code>\n"
+        "<b>/add_button</b> — Добавить кнопку в /links. Пример: <code>/add_button Название - https://ссылка;</code>\n"
+        "<b>/del_button</b> — Удалить кнопку из /links. Пример: <code>/del_button Название;</code>\n"
         "<b>/m</b> — Мут пользователя (ответом на сообщение, можно указать срок: <code>/m 10m</code>)\n"
         "<b>/b</b> — Бан пользователя (ответом на сообщение, можно указать срок: <code>/b 1d</code>)\n"
         "\n"
@@ -685,8 +696,8 @@ async def admin_mute(message: Message, bot: Bot) -> None:
             await message.reply("Ответьте на сообщение пользователя, чтобы замутить его.")
             return
         user_id = message.reply_to_message.from_user.id
-        muted_name = message.reply_to_message.from_user.username
-        admin_name = message.from_user.username
+        muted_name = message.reply_to_message.from_user.username if message.reply_to_message.from_user.username is not None else message.reply_to_message.from_user.first_name
+        admin_name = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
         args = message.text.split(maxsplit=1)
         duration = None
         if len(args) > 1:
@@ -719,8 +730,8 @@ async def admin_ban(message: Message, bot: Bot) -> None:
             await message.reply("Ответьте на сообщение пользователя, чтобы забанить его.")
             return
         user_id = message.reply_to_message.from_user.id
-        admin_name = message.from_user.username
-        banned_name = message.reply_to_message.from_user.username
+        admin_name = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
+        banned_name = message.reply_to_message.from_user.username if message.reply_to_message.from_user.username is not None else message.reply_to_message.from_user.first_name
         args = message.text.split(maxsplit=1)
         duration = None
         if len(args) > 1:
