@@ -98,36 +98,3 @@ class SizeModel(BaseModel):
             (('user_id', 'date'), True),  # Уникальный составной индекс
             (('date', 'size'), False),  # Индекс для сортировки по размеру за дату
         )
-
-def create_tables():
-    """Создает все таблицы в базе данных."""
-    try:
-        db.connect()
-        db.create_tables([
-            User_listModel,
-            AnekModel,
-            Chat_listModel,
-            Button_listModel,
-            SizeModel,
-            TextModel,
-        ])
-        logger.info("Таблицы успешно созданы")
-    except Exception as e:
-        logger.error(f"Ошибка при создании таблиц: {e}")
-    finally:
-        if not db.is_closed():
-            db.close()
-
-def init_db():
-    """Инициализирует базу данных."""
-    try:
-        db.connect()
-        create_tables()
-    except Exception as e:
-        logger.error(f"Ошибка при инициализации базы данных: {e}")
-    finally:
-        if not db.is_closed():
-            db.close()
-
-if __name__ == "__main__":
-    init_db()

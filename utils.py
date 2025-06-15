@@ -7,6 +7,8 @@ from functools import lru_cache
 import json
 from pathlib import Path
 
+from peewee import fn
+
 from model import AnekModel, User_listModel, SizeModel
 
 logger = logging.getLogger(__name__)
