@@ -247,7 +247,6 @@ async def stat(message: Message, bot: Bot) -> None:
             
             current_messages = q.message_count
             next_level_messages = calculate_messages_for_level(current_level + 1)
-            messages_to_next = next_level_messages - current_messages
             
             await bot.send_message(
                 chat_id=message.chat.id,
@@ -258,7 +257,6 @@ async def stat(message: Message, bot: Bot) -> None:
                     f"Уровень: {current_level}\n"
                     f"Звание: {user_rank}\n"
                     f"Опыт: {q.level_exp}/{next_level_exp} (+{exp_to_next} до следующего уровня)\n"
-                    f"До следующего уровня нужно сообщений: {messages_to_next}"
                 )
             )
         else:
