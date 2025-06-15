@@ -244,7 +244,8 @@ async def stat(message: Message, bot: Bot) -> None:
                 text=(
                     f"Статистика для {username}:\n"
                     f"Сообщений: {q.message_count}\n"
-                    f"С нами: {days} дн., {hours} ч., {minutes} мин."
+                    f"С нами: {days} дн., {hours} ч., {minutes} мин.\n"
+                    f"Кол-во опыта: {q.message_count }"
                 )
             )
         else:
@@ -773,17 +774,9 @@ async def messages_counter(message: Message, bot: Bot) -> None:
             })
             .on_conflict(
                 conflict_target=[User_listModel.user_id],
-                update={User_listModel.message_count: User_listModel.message_count + 1}
+                update={User_listModel.message_count: User_listModel.message_count + 1,User_listModel.level_exp: User_listModel.level_exp + 1},
             )
         )
         q.execute()
     except Exception as e:
         logger.error(f"Ошибка в messages_counter: {e}")
-
-@router.message(F.sender_chat.type == "channel")
-async def pin_only_last_channel_message(message: Message, bot: Bot) -> None:
-    try:
-        await bot.unpin_all_chat_messages(message.chat.id)
-        await bot.pin_chat_message(message.chat.id, message.message_id)
-    except Exception as e:
-        logger.warning(f"Не удалось закрепить сообщение канала: {e}")
