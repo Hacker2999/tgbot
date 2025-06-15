@@ -114,3 +114,6 @@ poetry.lock
 .DS_Store
 Thumbs.db
 
+# txt
+xyz.txt
+ranks.txt

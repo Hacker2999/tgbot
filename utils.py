@@ -38,6 +38,50 @@ def quota_check(userid: int, qcount: int) -> bool:
         return False
 
 
+def calculate_level(exp: int) -> int:
+    """
+    Рассчитывает уровень пользователя на основе опыта.
+    Формула: уровень = 1 + (опыт - 150) // 100
+    """
+    if exp < 150:
+        return 1
+    return 1 + (exp - 150) // 100
+
+
+def calculate_exp_for_level(level: int) -> int:
+    """
+    Рассчитывает требуемый опыт для достижения указанного уровня.
+    Формула: опыт = 150 + (уровень - 1) * 100
+    """
+    return 150 + (level - 1) * 100
+
+
+def get_user_rank(level: int) -> str:
+    """
+    Возвращает звание пользователя на основе его уровня.
+    Если уровень больше 20, возвращает звание для 20 уровня.
+    """
+    try:
+        with open("ranks.txt", "r", encoding="utf-8") as file:
+            ranks = [line.strip() for line in file if line.strip()]
+        
+        if not ranks:
+            return "Неизвестное звание"
+            
+        # Убираем номер уровня из строки (например, "1. " -> "")
+        ranks = [rank.split(". ", 1)[1] if ". " in rank else rank for rank in ranks]
+        
+        # Если уровень больше 20, возвращаем последнее звание
+        if level > 20:
+            return ranks[-1]
+            
+        # Возвращаем звание для текущего уровня (уровни начинаются с 1, а индексы с 0)
+        return ranks[level - 1]
+    except Exception as e:
+        logger.error(f"Ошибка при получении звания: {e}")
+        return "Неизвестное звание"
+
+
 
 
 

@@ -13,7 +13,7 @@ from peewee import fn
 
 from baneks_api import fetch_random_joke
 from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel
-from utils import quota_check
+from utils import quota_check, calculate_level, calculate_exp_for_level, get_user_rank
 from config import RULES, API_TOKEN, SPAM_LIMIT, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, KILL_CHAT_PASSWORD
 
 router = Router()
@@ -229,7 +229,7 @@ async def stat(message: Message, bot: Bot) -> None:
     try:
         q = (
             User_listModel
-            .select(User_listModel.created_at, User_listModel.message_count)
+            .select(User_listModel.created_at, User_listModel.message_count, User_listModel.level_exp)
             .where(User_listModel.user_id == message.from_user.id)
             .first()
         )
@@ -239,13 +239,21 @@ async def stat(message: Message, bot: Bot) -> None:
             hours = time_withus.seconds // 3600
             minutes = (time_withus.seconds % 3600) // 60
             username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
+            
+            current_level = calculate_level(q.level_exp)
+            next_level_exp = calculate_exp_for_level(current_level + 1)
+            exp_to_next = next_level_exp - q.level_exp
+            user_rank = get_user_rank(current_level)
+            
             await bot.send_message(
                 chat_id=message.chat.id,
                 text=(
                     f"Статистика для {username}:\n"
                     f"Сообщений: {q.message_count}\n"
                     f"С нами: {days} дн., {hours} ч., {minutes} мин.\n"
-                    f"Кол-во опыта: {q.message_count }"
+                    f"Уровень: {current_level}\n"
+                    f"Звание: {user_rank}\n"
+                    f"Опыт: {q.level_exp}/{next_level_exp} (+{exp_to_next} до следующего уровня)"
                 )
             )
         else:
@@ -257,7 +265,7 @@ async def stat(message: Message, bot: Bot) -> None:
         logger.error(f"Ошибка в stat: {e}")
         await bot.send_message(
             chat_id=message.chat.id,
-            text="Ошибка при получении статистики пользователя."
+            text="Ошибка при получении статистики."
         )
 
 @router.message(Command("set_welcome"))
