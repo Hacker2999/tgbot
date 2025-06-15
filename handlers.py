@@ -14,7 +14,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from peewee import fn, DatabaseError
 
 from baneks_api import fetch_random_joke
-from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel, WarnModel
+from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel
 from utils import quota_check, calculate_level, calculate_exp_for_level, calculate_messages_for_level, get_user_rank, check_visit_streak
 from config import RULES, API_TOKEN, SPAM_LIMIT, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, KILL_CHAT_PASSWORD
 
