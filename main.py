@@ -2,13 +2,18 @@ import asyncio
 import logging
 import signal
 from typing import Optional
-
+from datetime import datetime, time, timedelta
+import pytz
 from aiogram import Bot, Dispatcher
+from aiogram.enums import ParseMode
+from aiogram.fsm.storage.memory import MemoryStorage
+
 from config import API_TOKEN, CHANNEL_CHAT_ID
 from handlers import router
 from middleware import AntiSpamMiddleware
 from model import Chat_listModel
 from ignore_old_messages import IgnoreOldMessagesMiddleware
+from utils import award_size_top_exp
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -41,6 +46,35 @@ async def send_channel_message(bot: Bot, text: str) -> None:
     except Exception as e:
         logger.error(f"Не удалось отправить сообщение в канал: {e}")
 
+async def schedule_awards(bot: Bot, chat_id: int):
+    """Планировщик для начисления наград в 20:00 по МСК."""
+    while True:
+        try:
+            moscow_tz = pytz.timezone('Europe/Moscow')
+            now = datetime.now(moscow_tz)
+            target_time = time(20, 0)  # 20:00
+            
+            # Если текущее время больше 20:00, ждем до следующего дня
+            if now.time() > target_time:
+                next_run = datetime.combine(now.date() + timedelta(days=1), target_time)
+            else:
+                next_run = datetime.combine(now.date(), target_time)
+            
+            # Переводим в UTC для расчета задержки
+            next_run = moscow_tz.localize(next_run).astimezone(pytz.UTC)
+            now = now.astimezone(pytz.UTC)
+            
+            # Ждем до следующего запуска
+            delay = (next_run - now).total_seconds()
+            await asyncio.sleep(delay)
+            
+            # Начисляем награды
+            await award_size_top_exp(bot, chat_id)
+            
+        except Exception as e:
+            logger.error(f"Ошибка в планировщике наград: {e}")
+            await asyncio.sleep(60)  # Ждем минуту перед повторной попыткой
+
 async def main() -> None:
     """Запуск Telegram-бота с корректным завершением работы."""
     token = get_api_token()
@@ -68,6 +102,10 @@ async def main() -> None:
 
     logger.info("Бот запускается...")
     await send_channel_message(bot, "🤖 Бот запущен и готов к работе!")
+    
+    # Запускаем планировщик наград
+    asyncio.create_task(schedule_awards(bot, CHANNEL_CHAT_ID))
+    
     try:
         await dp.start_polling(bot, shutdown_event=stop_event)
     except Exception as e:

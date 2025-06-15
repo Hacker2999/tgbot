@@ -1,7 +1,18 @@
 from peewee import *
 from config import DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
+from datetime import datetime
+import logging
 
-db = PostgresqlDatabase(database=DB_NAME, user=DB_USER, password=DB_PASSWORD, host=DB_HOST, port=DB_PORT)
+logger = logging.getLogger(__name__)
+
+# Конфигурация базы данных
+db = PostgresqlDatabase(
+    'tgbot',
+    user='postgres',
+    password='postgres',
+    host='localhost',
+    port=5432
+)
 
 class BaseModel(Model):
     class Meta:
@@ -45,9 +56,18 @@ class User_listModel(BaseModel):
     is_verified = BooleanField(default=False)  # Прошел ли пользователь капчу
     level_exp = BigIntegerField(default=0)
     bonus_exp = BigIntegerField(default=0)
+    warn_count = BigIntegerField(default=0)  # Количество предупреждений
+    last_visit = DateField(null=True)  # Дата последнего посещения
+    visit_streak = BigIntegerField(default=0)  # Текущий винстрик посещений
 
     class Meta:
         table_name = 'user_list'
+        indexes = (
+            (('user_id',), True),  # Уникальный индекс
+            (('message_count',), False),  # Индекс для сортировки
+            (('level_exp',), False),  # Индекс для сортировки
+            (('last_visit',), False),  # Индекс для проверки винстрика
+        )
 
 class Chat_listModel(BaseModel):
     id = BigAutoField(primary_key=True)
@@ -56,6 +76,9 @@ class Chat_listModel(BaseModel):
 
     class Meta:
         table_name = 'chat_list'
+        indexes = (
+            (('chat_id',), True),  # Уникальный индекс
+        )
 
 class Button_listModel(BaseModel):
     id = BigAutoField(primary_key=True)  # bigint, генерируется по умолчанию как identity
@@ -64,6 +87,10 @@ class Button_listModel(BaseModel):
 
     class Meta:
         table_name = 'button_list'
+        indexes = (
+            (('button_name',), False),  # Индекс для поиска по имени
+            (('button_link',), True),  # Уникальный индекс
+        )
 
 class SizeModel(BaseModel):
     id = BigAutoField(primary_key=True)
@@ -73,3 +100,40 @@ class SizeModel(BaseModel):
 
     class Meta:
         table_name = 'size_list'
+        indexes = (
+            (('user_id', 'date'), True),  # Уникальный составной индекс
+            (('date', 'size'), False),  # Индекс для сортировки по размеру за дату
+        )
+
+def create_tables():
+    """Создает все таблицы в базе данных."""
+    try:
+        db.connect()
+        db.create_tables([
+            User_listModel,
+            AnekModel,
+            Chat_listModel,
+            Button_listModel,
+            SizeModel,
+            TextModel,
+        ])
+        logger.info("Таблицы успешно созданы")
+    except Exception as e:
+        logger.error(f"Ошибка при создании таблиц: {e}")
+    finally:
+        if not db.is_closed():
+            db.close()
+
+def init_db():
+    """Инициализирует базу данных."""
+    try:
+        db.connect()
+        create_tables()
+    except Exception as e:
+        logger.error(f"Ошибка при инициализации базы данных: {e}")
+    finally:
+        if not db.is_closed():
+            db.close()
+
+if __name__ == "__main__":
+    init_db()

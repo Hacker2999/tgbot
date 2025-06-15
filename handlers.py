@@ -4,47 +4,110 @@ import random
 import re
 import asyncio
 import hashlib
+from typing import Optional, Dict, List, Tuple
+from functools import lru_cache
 
 from aiogram import Router, Bot, F
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberUpdated, BotCommand, MenuButtonCommands, ChatPermissions, CallbackQuery
 from aiogram.filters import Command, ChatMemberUpdatedFilter, IS_MEMBER, IS_NOT_MEMBER
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from peewee import fn
+from peewee import fn, DatabaseError
 
 from baneks_api import fetch_random_joke
-from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel
-from utils import quota_check, calculate_level, calculate_exp_for_level, calculate_messages_for_level, get_user_rank
+from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel, WarnModel
+from utils import quota_check, calculate_level, calculate_exp_for_level, calculate_messages_for_level, get_user_rank, check_visit_streak
 from config import RULES, API_TOKEN, SPAM_LIMIT, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, KILL_CHAT_PASSWORD
 
 router = Router()
 logger = logging.getLogger(__name__)
 
+# Константы
+CAPTCHA_TIMEOUT = 120  # секунд
+CAPTCHA_ANSWERS = ["Я не бот", "Я бот", "12345"]
+MAX_MUTE_MINUTES = 1440  # 24 часа
+MIN_MUTE_MINUTES = 1
+
+# Кэш для проверки админов
+ADMIN_CACHE: Dict[Tuple[int, int], bool] = {}
+ADMIN_CACHE_TIMEOUT = 300  # 5 минут
+
 # --- Вспомогательные функции ---
-def parse_time_arg(arg: str) -> timedelta:
-    match = re.match(r"(\d+)\s*(min|m|h|d|w|y|mo|mon)?", arg)
-    if not match:
+
+@lru_cache(maxsize=1000)
+def parse_time_arg(arg: str) -> Optional[timedelta]:
+    """
+    Парсит строку с временным интервалом.
+    
+    Args:
+        arg (str): Строка с временным интервалом (например, "5m", "1h", "2d")
+        
+    Returns:
+        Optional[timedelta]: Объект timedelta или None при ошибке
+    """
+    try:
+        match = re.match(r"(\d+)\s*(min|m|h|d|w|y|mo|mon)?", arg)
+        if not match:
+            return None
+            
+        value, unit = match.groups()
+        value = int(value)
+        
+        if unit in ("min", "m"):
+            return timedelta(minutes=value)
+        elif unit == "h":
+            return timedelta(hours=value)
+        elif unit == "d":
+            return timedelta(days=value)
+        elif unit == "w":
+            return timedelta(weeks=value)
+        elif unit in ("mo", "mon"):
+            return timedelta(days=30*value)
+        elif unit == "y":
+            return timedelta(days=365*value)
+        else:
+            return timedelta(seconds=value)
+    except Exception as e:
+        logger.error(f"Ошибка при парсинге временного интервала '{arg}': {e}")
         return None
-    value, unit = match.groups()
-    value = int(value)
-    if unit in ("min", "m"):
-        return timedelta(minutes=value)
-    elif unit == "h":
-        return timedelta(hours=value)
-    elif unit == "d":
-        return timedelta(days=value)
-    elif unit == "w":
-        return timedelta(weeks=value)
-    elif unit in ("mo", "mon"):
-        return timedelta(days=30*value)
-    elif unit == "y":
-        return timedelta(days=365*value)
-    else:
-        return timedelta(seconds=value)
+
+async def is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
+    """
+    Проверяет, является ли пользователь администратором чата.
+    Использует кэширование для оптимизации.
+    
+    Args:
+        bot (Bot): Экземпляр бота
+        chat_id (int): ID чата
+        user_id (int): ID пользователя
+        
+    Returns:
+        bool: True если пользователь админ, False если нет
+    """
+    cache_key = (chat_id, user_id)
+    current_time = datetime.now().timestamp()
+    
+    # Проверяем кэш
+    if cache_key in ADMIN_CACHE:
+        cached_result, timestamp = ADMIN_CACHE[cache_key]
+        if current_time - timestamp < ADMIN_CACHE_TIMEOUT:
+            return cached_result
+    
+    try:
+        member = await bot.get_chat_member(chat_id, user_id)
+        is_admin = member.status in ("administrator", "creator")
+        
+        # Сохраняем в кэш
+        ADMIN_CACHE[cache_key] = (is_admin, current_time)
+        return is_admin
+    except Exception as e:
+        logger.error(f"Ошибка при проверке прав администратора для user_id {user_id} в чате {chat_id}: {e}")
+        return False
 
 # --- Обработчики событий ---
 
 @router.my_chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
 async def handle_member_join(event: ChatMemberUpdated, bot: Bot) -> None:
+    """Обработчик добавления бота в чат."""
     try:
         if event.new_chat_member and event.new_chat_member.user.id == bot.id:
             q = (
@@ -63,12 +126,9 @@ async def handle_member_join(event: ChatMemberUpdated, bot: Bot) -> None:
                 text="Бот успешно добавлен в этот чат!"
             )
     except Exception as e:
-        logger.error(f"Ошибка в handle_member_join: {e}")
+        logger.error(f"Ошибка в handle_member_join для чата {event.chat.id}: {e}")
 
 # --- Анти-рейд капча ---
-
-CAPTCHA_TIMEOUT = 120  # секунд
-CAPTCHA_ANSWERS = ["Я не бот", "Я бот", "12345"]
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
 async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
@@ -731,11 +791,98 @@ async def killchatall(message: Message, bot: Bot) -> None:
         except Exception:
             pass
 
-# --- Админ-команды ---
+@router.message(Command("warn"))
+async def warn_user(message: Message, bot: Bot) -> None:
+    """Выдать предупреждение пользователю."""
+    if not await is_admin(bot, message.chat.id, message.from_user.id):
+        await message.reply("Только администратор может использовать эту команду.")
+        return
 
-async def is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
-    member = await bot.get_chat_member(chat_id, user_id)
-    return member.status in ("administrator", "creator")
+    try:
+        if not message.reply_to_message:
+            await message.reply("Ответьте на сообщение пользователя, чтобы выдать предупреждение.")
+            return
+
+        user_id = message.reply_to_message.from_user.id
+        chat_id = message.chat.id
+        warned_name = message.reply_to_message.from_user.username if message.reply_to_message.from_user.username is not None else message.reply_to_message.from_user.first_name
+        admin_name = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
+
+        # Получаем или создаем запись пользователя
+        user_record = User_listModel.get_or_none(User_listModel.user_id == user_id)
+        if user_record is None:
+            user_record = User_listModel.create(
+                user_id=user_id,
+                warn_count=1
+            )
+        else:
+            user_record.warn_count += 1
+            user_record.save()
+
+        # Проверяем количество предупреждений
+        if user_record.warn_count >= 3:
+            # Баним пользователя
+            try:
+                await bot.ban_chat_member(chat_id, user_id)
+                await bot.unban_chat_member(chat_id, user_id)  # кик
+                await message.reply(
+                    f"Пользователь <b>{warned_name}</b> получил 3 предупреждения и был удален из чата.",
+                    parse_mode="HTML"
+                )
+                # Сбрасываем счетчик предупреждений
+                user_record.warn_count = 0
+                user_record.save()
+            except Exception as e:
+                logger.error(f"Ошибка при бане пользователя: {e}")
+                await message.reply("Не удалось удалить пользователя. Проверьте права бота.")
+        else:
+            await message.reply(
+                f"Пользователю <b>{warned_name}</b> выдано предупреждение ({user_record.warn_count}/3). "
+                f"3 предупреждения — Бан!",
+                parse_mode="HTML"
+            )
+
+    except Exception as e:
+        logger.error(f"Ошибка в warn_user: {e}")
+        await message.reply("Произошла ошибка при выдаче предупреждения.")
+
+@router.message(Command("unwarn"))
+async def unwarn_user(message: Message, bot: Bot) -> None:
+    """Снять все предупреждения у пользователя."""
+    if not await is_admin(bot, message.chat.id, message.from_user.id):
+        await message.reply("Только администратор может использовать эту команду.")
+        return
+
+    try:
+        if not message.reply_to_message:
+            await message.reply("Ответьте на сообщение пользователя, чтобы снять предупреждения.")
+            return
+
+        user_id = message.reply_to_message.from_user.id
+        user_name = message.reply_to_message.from_user.username if message.reply_to_message.from_user.username is not None else message.reply_to_message.from_user.first_name
+        admin_name = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
+
+        # Получаем запись пользователя
+        user_record = User_listModel.get_or_none(User_listModel.user_id == user_id)
+        if user_record is None or user_record.warn_count == 0:
+            await message.reply(f"У пользователя <b>{user_name}</b> нет предупреждений.", parse_mode="HTML")
+            return
+
+        # Сбрасываем счетчик предупреждений
+        old_warn_count = user_record.warn_count
+        user_record.warn_count = 0
+        user_record.save()
+
+        await message.reply(
+            f"Администратор <b>{admin_name}</b> снял все предупреждения ({old_warn_count}) у пользователя <b>{user_name}</b>.",
+            parse_mode="HTML"
+        )
+
+    except Exception as e:
+        logger.error(f"Ошибка в unwarn_user: {e}")
+        await message.reply("Произошла ошибка при снятии предупреждений.")
+
+# --- Админ-команды ---
 
 @router.message(Command("m"))
 async def admin_mute(message: Message, bot: Bot) -> None:
@@ -809,14 +956,39 @@ async def admin_ban(message: Message, bot: Bot) -> None:
 
 @router.message()
 async def messages_counter(message: Message, bot: Bot) -> None:
-    # Фильтруем команды (сообщения, начинающиеся с "/") и удаляем их
-    if message.text and message.text.startswith("/"):
-        try:
-            await message.delete()
-        except Exception as e:
-            logger.error(f"Не удалось удалить мусорное сообщение: {e}")
-        return
+    """Обработчик всех сообщений для подсчета статистики и начисления опыта."""
     try:
+        # Фильтруем команды
+        if message.text and message.text.startswith("/"):
+            try:
+                await message.delete()
+            except Exception as e:
+                logger.error(f"Не удалось удалить команду в чате {message.chat.id}: {e}")
+            return
+            
+        # Проверяем винстрик
+        is_new_day, streak = check_visit_streak(message.from_user.id)
+        if is_new_day and streak > 1:
+            username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
+            await message.reply(
+                f"🎉 <b>{username}</b>, в чате {streak}-й день подряд!",
+                parse_mode="HTML"
+            )
+
+        # Проверяем шанс получения бонусного опыта (5%)
+        if random.random() < 0.05:
+            user = User_listModel.get_or_none(User_listModel.user_id == message.from_user.id)
+            if user:
+                bonus_exp = random.randint(100, 500)
+                user.bonus_exp += bonus_exp
+                user.save()
+                username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
+                await message.reply(
+                    f"🎲 <b>{username}</b> получает <b>{bonus_exp}</b> бонусного опыта за активность!",
+                    parse_mode="HTML"
+                )
+
+        # Обновляем статистику
         q = (
             User_listModel
             .insert({
@@ -833,4 +1005,4 @@ async def messages_counter(message: Message, bot: Bot) -> None:
         )
         q.execute()
     except Exception as e:
-        logger.error(f"Ошибка в messages_counter: {e}")
+        logger.error(f"Ошибка в messages_counter для user_id {message.from_user.id}: {e}")
