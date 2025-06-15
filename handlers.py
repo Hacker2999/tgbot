@@ -13,7 +13,7 @@ from peewee import fn
 
 from baneks_api import fetch_random_joke
 from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel
-from utils import quota_check, calculate_level, calculate_exp_for_level, get_user_rank
+from utils import quota_check, calculate_level, calculate_exp_for_level, calculate_messages_for_level, get_user_rank
 from config import RULES, API_TOKEN, SPAM_LIMIT, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, KILL_CHAT_PASSWORD
 
 router = Router()
@@ -245,6 +245,10 @@ async def stat(message: Message, bot: Bot) -> None:
             exp_to_next = next_level_exp - q.level_exp
             user_rank = get_user_rank(current_level)
             
+            current_messages = q.message_count
+            next_level_messages = calculate_messages_for_level(current_level + 1)
+            messages_to_next = next_level_messages - current_messages
+            
             await bot.send_message(
                 chat_id=message.chat.id,
                 text=(
@@ -253,7 +257,8 @@ async def stat(message: Message, bot: Bot) -> None:
                     f"С нами: {days} дн., {hours} ч., {minutes} мин.\n"
                     f"Уровень: {current_level}\n"
                     f"Звание: {user_rank}\n"
-                    f"Опыт: {q.level_exp}/{next_level_exp} (+{exp_to_next} до следующего уровня)"
+                    f"Опыт: {q.level_exp}/{next_level_exp} (+{exp_to_next} до следующего уровня)\n"
+                    f"До следующего уровня нужно сообщений: {messages_to_next}"
                 )
             )
         else:
