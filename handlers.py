@@ -149,39 +149,79 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
 async def captcha_callback(call: CallbackQuery, bot: Bot) -> None:
     try:
         data = call.data.split("_")
+        if len(data) != 3:
+            logger.error(f"Неверный формат callback данных: {call.data}")
+            await call.answer("Произошла ошибка. Попробуйте еще раз.", show_alert=True)
+            return
+
         answer = data[1]
-        user_id = int(data[2])
+        try:
+            user_id = int(data[2])
+        except ValueError:
+            logger.error(f"Неверный формат user_id в callback: {data[2]}")
+            await call.answer("Произошла ошибка. Попробуйте еще раз.", show_alert=True)
+            return
+
         if call.from_user.id != user_id:
             await call.answer("Это не ваша капча!", show_alert=True)
             return
+
         chat_id = call.message.chat.id
         if answer == "Я не бот":
-            # Снять ограничения
-            await bot.restrict_chat_member(
-                chat_id=chat_id,
-                user_id=user_id,
-                permissions=ChatPermissions(can_send_messages=True, can_send_media_messages=True, can_send_other_messages=True, can_add_web_page_previews=True)
-            )
-            # Обновить is_verified=True
-            User_listModel.update({User_listModel.is_verified: True}).where(User_listModel.user_id == user_id).execute()
-            await call.message.edit_text("✅ Капча пройдена! Добро пожаловать!")
-            # Отправить приветственное сообщение из базы
-            q = (
-                TextModel
-                .select(TextModel.text_of)
-                .where(TextModel.target == "welcome_message")
-                .first()
-            )
-            WELCOME_MESSAGE = q.text_of if q else "Добро пожаловать!"
-            username = call.from_user.username if call.from_user.username is not None else call.from_user.first_name
-            await bot.send_message(
-                chat_id=chat_id,
-                text=f"{username},{WELCOME_MESSAGE} !"
-            )
+            try:
+                # Снять ограничения
+                await bot.restrict_chat_member(
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    permissions=ChatPermissions(
+                        can_send_messages=True,
+                        can_send_media_messages=True,
+                        can_send_other_messages=True,
+                        can_add_web_page_previews=True
+                    )
+                )
+                # Обновить is_verified=True
+                try:
+                    User_listModel.update({User_listModel.is_verified: True}).where(
+                        User_listModel.user_id == user_id
+                    ).execute()
+                except DatabaseError as db_err:
+                    logger.error(f"Ошибка при обновлении статуса верификации в БД: {db_err}")
+                    await call.answer("Произошла ошибка. Попробуйте еще раз.", show_alert=True)
+                    return
+
+                await call.message.edit_text("✅ Капча пройдена! Добро пожаловать!")
+                
+                # Отправить приветственное сообщение из базы
+                try:
+                    q = (
+                        TextModel
+                        .select(TextModel.text_of)
+                        .where(TextModel.target == "welcome_message")
+                        .first()
+                    )
+                    WELCOME_MESSAGE = q.text_of if q else "Добро пожаловать!"
+                    username = call.from_user.username if call.from_user.username is not None else call.from_user.first_name
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text=f"{username}, {WELCOME_MESSAGE}!"
+                    )
+                except DatabaseError as db_err:
+                    logger.error(f"Ошибка при получении приветственного сообщения из БД: {db_err}")
+                    # Отправляем стандартное приветствие в случае ошибки
+                    username = call.from_user.username if call.from_user.username is not None else call.from_user.first_name
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text=f"{username}, Добро пожаловать!"
+                    )
+            except Exception as e:
+                logger.error(f"Ошибка при обработке успешной капчи: {e}")
+                await call.answer("Произошла ошибка. Попробуйте еще раз.", show_alert=True)
         else:
             await call.answer("Неверно! Попробуйте ещё раз.", show_alert=True)
     except Exception as e:
         logger.error(f"Ошибка в captcha_callback: {e}")
+        await call.answer("Произошла ошибка. Попробуйте еще раз.", show_alert=True)
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_MEMBER >> IS_NOT_MEMBER))
 async def handle_member_leave(event: ChatMemberUpdated, bot: Bot) -> None:
@@ -776,11 +816,6 @@ async def messages_counter(message: Message, bot: Bot) -> None:
         except Exception as e:
             logger.error(f"Не удалось удалить мусорное сообщение: {e}")
         return
-    chat_member = await bot.get_chat_member(
-        chat_id=message.chat.id,
-        user_id=message.from_user.id
-    )
-    total_messages = chat_member.user.message_count if hasattr(chat_member.user, 'message_count') else 0
     try:
         q = (
             User_listModel
@@ -791,8 +826,8 @@ async def messages_counter(message: Message, bot: Bot) -> None:
             .on_conflict(
                 conflict_target=[User_listModel.user_id],
                 update={
-                    User_listModel.message_count: total_messages,
-                    User_listModel.level_exp: total_messages + User_listModel.bonus_exp
+                    User_listModel.message_count: User_listModel.message_count + 1,
+                    User_listModel.level_exp: User_listModel.level_exp + 1
                 }
             )
         )

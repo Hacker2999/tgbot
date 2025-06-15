@@ -31,6 +31,16 @@ async def notify_all_chats(bot: Bot, text: str):
     except Exception as e:
         logger.error(f"Не удалось получить список чатов для уведомлений: {e}")
 
+async def send_channel_message(bot: Bot, text: str) -> None:
+    """Отправка сообщения в канал с обработкой ошибок."""
+    if not CHANNEL_CHAT_ID:
+        logger.error("CHANNEL_CHAT_ID не установлен в config.py!")
+        return
+    try:
+        await bot.send_message(CHANNEL_CHAT_ID, text)
+    except Exception as e:
+        logger.error(f"Не удалось отправить сообщение в канал: {e}")
+
 async def main() -> None:
     """Запуск Telegram-бота с корректным завершением работы."""
     token = get_api_token()
@@ -57,14 +67,14 @@ async def main() -> None:
             pass
 
     logger.info("Бот запускается...")
-    await bot.send_message(CHANNEL_CHAT_ID, "🤖 Бот запущен и готов к работе!")
+    await send_channel_message(bot, "🤖 Бот запущен и готов к работе!")
     try:
         await dp.start_polling(bot, shutdown_event=stop_event)
     except Exception as e:
         logger.error(f"Бот остановлен с ошибкой: {e}")
     finally:
         logger.info("Бот завершил работу.")
-        await bot.send_message(CHANNEL_CHAT_ID, "⚠️ Бот завершил работу. До скорой встречи!")
+        await send_channel_message(bot, "⚠️ Бот завершил работу. До скорой встречи!")
 
 if __name__ == "__main__":
     asyncio.run(main())

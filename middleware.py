@@ -8,6 +8,7 @@ from typing import Any, Awaitable, Callable, Dict
 import time
 
 from model import BanList
+from peewee import DatabaseError
 
 logger = logging.getLogger(__name__)
 
@@ -25,18 +26,36 @@ class AntiSpamMiddleware(BaseMiddleware):
         4: timedelta(days=365),
     }
     DEFAULT_MUTE_DURATION = timedelta(days=365)
+    ADMIN_CACHE_TTL = 60  # время жизни кэша администраторов в секундах
+    CACHE_CLEANUP_INTERVAL = 300  # интервал очистки кэша в секундах
 
     def __init__(self, spam_limit: int = 5) -> None:
         self.spam_limit = spam_limit  # Лимит одинаковых сообщений в минуту
         self.user_messages: Dict[int, list] = defaultdict(list)  # user_id -> [(datetime, content_id)]
         self.user_penalties: Dict[int, int] = defaultdict(int)  # user_id -> количество наказаний
         self.admins_cache: Dict[int, tuple] = {}  # chat_id -> (timestamp, set(admin_ids))
+        self.last_cache_cleanup = time.time()
         super().__init__()
+
+    def _cleanup_old_cache(self) -> None:
+        """Очистка устаревших записей из кэша."""
+        now = time.time()
+        if now - self.last_cache_cleanup < self.CACHE_CLEANUP_INTERVAL:
+            return
+        
+        self.admins_cache = {
+            chat_id: (timestamp, admin_ids)
+            for chat_id, (timestamp, admin_ids) in self.admins_cache.items()
+            if now - timestamp < self.ADMIN_CACHE_TTL
+        }
+        self.last_cache_cleanup = now
 
     async def is_admin(self, bot: Bot, chat_id: int, user_id: int) -> bool:
         now = time.time()
+        self._cleanup_old_cache()
+        
         cache = self.admins_cache.get(chat_id)
-        if cache and now - cache[0] < 60:  # 60 секунд кэш
+        if cache and now - cache[0] < self.ADMIN_CACHE_TTL:
             admin_ids = cache[1]
         else:
             try:
@@ -112,26 +131,30 @@ class AntiSpamMiddleware(BaseMiddleware):
                         permissions={"can_send_messages": False},
                         until_date=mute_end
                     )
-                    q = (
-                        BanList
-                        .insert({
-                            BanList.user_id: user_id,
-                            BanList.ban_start: mute_start,
-                            BanList.ban_end: mute_end,
-                            BanList.reason: "Спам",
-                            BanList.ban_from: str(chat_id)
-                        })
-                        .on_conflict(
-                            conflict_target=[BanList.user_id],
-                            update={
+                    try:
+                        q = (
+                            BanList
+                            .insert({
+                                BanList.user_id: user_id,
                                 BanList.ban_start: mute_start,
                                 BanList.ban_end: mute_end,
                                 BanList.reason: "Спам",
                                 BanList.ban_from: str(chat_id)
-                            }
+                            })
+                            .on_conflict(
+                                conflict_target=[BanList.user_id],
+                                update={
+                                    BanList.ban_start: mute_start,
+                                    BanList.ban_end: mute_end,
+                                    BanList.reason: "Спам",
+                                    BanList.ban_from: str(chat_id)
+                                }
+                            )
                         )
-                    )
-                    q.execute()
+                        q.execute()
+                    except DatabaseError as db_err:
+                        logger.error(f"Ошибка при сохранении информации о бане в БД: {db_err}")
+                    
                     logger.info(f"Пользователь {user_name} ({user_id}) замучен в чате {chat_id} за спам на {mute_duration}.")
                     # Удалить спам-сообщение
                     try:
