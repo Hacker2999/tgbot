@@ -6,13 +6,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Конфигурация базы данных
-db = PostgresqlDatabase(
-    'tgbot',
-    user='postgres',
-    password='postgres',
-    host='localhost',
-    port=5432
-)
+db = PostgresqlDatabase(database=DB_NAME, user=DB_USER, password=DB_PASSWORD, host=DB_HOST, port=DB_PORT)
 
 class BaseModel(Model):
     class Meta:
