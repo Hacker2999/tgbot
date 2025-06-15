@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 from typing import Optional
+import logging
 
 from model import AnekModel
 
-
+logger = logging.getLogger(__name__)
 def quota_check(userid: int, qcount: int) -> bool:
     """
     Проверяет, превысил ли пользователь дневной лимит анекдотов.
