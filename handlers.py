@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import random
 import re
 import asyncio
@@ -142,13 +142,13 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
             (
                 User_listModel
                 .insert({
-                    User_listModel.created_at: fn.now(),
+                    User_listModel.created_at: datetime.now(timezone.utc),
                     User_listModel.user_id: user_id,
                     User_listModel.is_verified: True
                 })
                 .on_conflict(
                     conflict_target=[User_listModel.user_id],
-                    update={User_listModel.is_verified: True, User_listModel.created_at: fn.now()}
+                    update={User_listModel.is_verified: True, User_listModel.created_at: datetime.now(timezone.utc)}
                 )
             ).execute()
             return  # Не показываем капчу
@@ -156,13 +156,13 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
         (
             User_listModel
             .insert({
-                User_listModel.created_at: fn.now(),
+                User_listModel.created_at: datetime.now(timezone.utc),
                 User_listModel.user_id: user_id,
                 User_listModel.is_verified: False
             })
             .on_conflict(
                 conflict_target=[User_listModel.user_id],
-                update={User_listModel.is_verified: False, User_listModel.created_at: fn.now()}
+                update={User_listModel.is_verified: False, User_listModel.created_at: datetime.now(timezone.utc)}
             )
         ).execute()
         # 2. Ограничить права пользователя (только чтение)

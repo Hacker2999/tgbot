@@ -190,14 +190,15 @@ def check_visit_streak(user_id: int) -> Tuple[bool, int]:
         Tuple[bool, int]: (is_new_day, streak) - является ли это новым днем и текущий винстрик
     """
     try:
-        today = datetime.now().date()
+        today = datetime.now(timezone.utc).date()
         user = User_listModel.get_or_none(User_listModel.user_id == user_id)
         
         if user is None:
             user = User_listModel.create(
                 user_id=user_id,
                 last_visit=today,
-                visit_streak=1
+                visit_streak=1,
+                created_at=datetime.now(timezone.utc)
             )
             return True, 1
         
