@@ -813,7 +813,8 @@ async def warn_user(message: Message, bot: Bot) -> None:
         if user_record is None:
             user_record = User_listModel.create(
                 user_id=user_id,
-                warn_count=1
+                warn_count=1,
+                created_at=datetime.now(timezone.utc)
             )
         else:
             user_record.warn_count += 1
