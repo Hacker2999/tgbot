@@ -776,6 +776,11 @@ async def messages_counter(message: Message, bot: Bot) -> None:
         except Exception as e:
             logger.error(f"Не удалось удалить мусорное сообщение: {e}")
         return
+    chat_member = await bot.get_chat_member(
+        chat_id=message.chat.id,
+        user_id=message.from_user.id
+    )
+    total_messages = chat_member.user.message_count if hasattr(chat_member.user, 'message_count') else 0
     try:
         q = (
             User_listModel
@@ -786,8 +791,8 @@ async def messages_counter(message: Message, bot: Bot) -> None:
             .on_conflict(
                 conflict_target=[User_listModel.user_id],
                 update={
-                    User_listModel.message_count: User_listModel.message_count + 1,
-                    User_listModel.level_exp: User_listModel.level_exp + 1
+                    User_listModel.message_count: total_messages,
+                    User_listModel.level_exp: total_messages + User_listModel.bonus_exp
                 }
             )
         )

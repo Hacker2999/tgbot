@@ -44,6 +44,7 @@ class User_listModel(BaseModel):
     message_count = BigIntegerField(default=0)
     is_verified = BooleanField(default=False)  # Прошел ли пользователь капчу
     level_exp = BigIntegerField(default=0)
+    bonus_exp = BigIntegerField(default=0)
 
     class Meta:
         table_name = 'user_list'
