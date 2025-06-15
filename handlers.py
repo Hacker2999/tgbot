@@ -142,13 +142,13 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
             (
                 User_listModel
                 .insert({
-                    User_listModel.created_at: datetime.now(timezone.utc),
+                    User_listModel.created_at: fn.now(),
                     User_listModel.user_id: user_id,
                     User_listModel.is_verified: True
                 })
                 .on_conflict(
                     conflict_target=[User_listModel.user_id],
-                    update={User_listModel.is_verified: True, User_listModel.created_at: datetime.now(timezone.utc)}
+                    update={User_listModel.is_verified: True, User_listModel.created_at: fn.now()}
                 )
             ).execute()
             return  # Не показываем капчу
@@ -156,13 +156,13 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
         (
             User_listModel
             .insert({
-                User_listModel.created_at: datetime.now(timezone.utc),
+                User_listModel.created_at: fn.now(),
                 User_listModel.user_id: user_id,
                 User_listModel.is_verified: False
             })
             .on_conflict(
                 conflict_target=[User_listModel.user_id],
-                update={User_listModel.is_verified: False, User_listModel.created_at: datetime.now(timezone.utc)}
+                update={User_listModel.is_verified: False, User_listModel.created_at: fn.now()}
             )
         ).execute()
         # 2. Ограничить права пользователя (только чтение)
@@ -814,7 +814,7 @@ async def warn_user(message: Message, bot: Bot) -> None:
             user_record = User_listModel.create(
                 user_id=user_id,
                 warn_count=1,
-                created_at=datetime.now(timezone.utc)
+                created_at=fn.now()
             )
         else:
             user_record.warn_count += 1

@@ -198,7 +198,7 @@ def check_visit_streak(user_id: int) -> Tuple[bool, int]:
                 user_id=user_id,
                 last_visit=today,
                 visit_streak=1,
-                created_at=datetime.now(timezone.utc)
+                created_at=fn.now()
             )
             return True, 1
         
