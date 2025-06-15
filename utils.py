@@ -41,23 +41,54 @@ def quota_check(userid: int, qcount: int) -> bool:
 def calculate_level(exp: int) -> int:
     """
     Рассчитывает уровень пользователя на основе опыта.
-    Формула основана на таблице уровней:
-    Уровень 1: 0-149 опыта
-    Уровень 2: 150-249 опыта
-    Уровень 3: 250-349 опыта
-    И так далее...
+    Формула учитывает увеличивающуюся разницу между уровнями:
+    - Уровень 1: 150-399 опыта (разница 250)
+    - Уровень 2: 400-749 опыта (разница 350)
+    - Уровень 3: 750-1199 опыта (разница 450)
+    и так далее...
     """
     if exp < 150:
         return 1
-    return 1 + (exp - 150) // 100
+    
+    # Начальные значения
+    base_exp = 150  # начальный опыт
+    base_diff = 250  # начальная разница
+    diff_increase = 100  # увеличение разницы между уровнями
+    
+    # Находим уровень через квадратное уравнение
+    # exp = base_exp + base_diff*(level-1) + (diff_increase/2)*(level-1)*(level-2)
+    # Преобразуем в: (diff_increase/2)*level^2 + (base_diff-diff_increase)*level - (exp + base_diff - base_exp) = 0
+    a = diff_increase / 2
+    b = base_diff - diff_increase
+    c = -(exp + base_diff - base_exp)
+    
+    # Решаем квадратное уравнение
+    discriminant = b**2 - 4*a*c
+    level = int((-b + (discriminant)**0.5) / (2*a))
+    
+    return min(max(level, 1), 20)
 
 
 def calculate_exp_for_level(level: int) -> int:
     """
     Рассчитывает требуемый опыт для достижения указанного уровня.
-    Формула: опыт = 150 + (уровень - 1) * 100
+    Формула учитывает увеличивающуюся разницу между уровнями:
+    exp = base_exp + base_diff*(level-1) + (diff_increase/2)*(level-1)*(level-2)
+    где:
+    - base_exp = 150 (начальный опыт)
+    - base_diff = 250 (начальная разница)
+    - diff_increase = 100 (увеличение разницы между уровнями)
     """
-    return 150 + (level - 1) * 100
+    if level < 1:
+        return 0
+    if level > 20:
+        return 22000
+        
+    base_exp = 150
+    base_diff = 250
+    diff_increase = 100
+    
+    return int(base_exp + base_diff*(level-1) + (diff_increase/2)*(level-1)*(level-2))
 
 
 def calculate_messages_for_level(level: int) -> int:

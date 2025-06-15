@@ -787,7 +787,10 @@ async def messages_counter(message: Message, bot: Bot) -> None:
             })
             .on_conflict(
                 conflict_target=[User_listModel.user_id],
-                update={User_listModel.message_count: User_listModel.message_count + 1,User_listModel.level_exp: User_listModel.level_exp + 1},
+                update={
+                    User_listModel.message_count: User_listModel.message_count + 1,
+                    User_listModel.level_exp: User_listModel.level_exp + 1
+                }
             )
         )
         q.execute()
