@@ -144,7 +144,8 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
                 .insert({
                     User_listModel.created_at: fn.now(),
                     User_listModel.user_id: user_id,
-                    User_listModel.is_verified: True
+                    User_listModel.is_verified: True,
+                    User_listModel.last_visit: fn.now(),
                 })
                 .on_conflict(
                     conflict_target=[User_listModel.user_id],
@@ -158,7 +159,8 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
             .insert({
                 User_listModel.created_at: fn.now(),
                 User_listModel.user_id: user_id,
-                User_listModel.is_verified: False
+                User_listModel.is_verified: False,
+                User_listModel.last_visit: fn.now(),
             })
             .on_conflict(
                 conflict_target=[User_listModel.user_id],
@@ -814,7 +816,8 @@ async def warn_user(message: Message, bot: Bot) -> None:
             user_record = User_listModel.create(
                 user_id=user_id,
                 warn_count=1,
-                created_at=fn.now()
+                created_at=fn.now(),
+                last_visit=fn.now(),
             )
         else:
             user_record.warn_count += 1
@@ -995,6 +998,7 @@ async def messages_counter(message: Message, bot: Bot) -> None:
             .insert({
                 User_listModel.created_at: fn.now(),
                 User_listModel.user_id: message.from_user.id,
+                User_listModel.last_visit: fn.now(),
             })
             .on_conflict(
                 conflict_target=[User_listModel.user_id],
