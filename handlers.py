@@ -810,18 +810,23 @@ async def warn_user(message: Message, bot: Bot) -> None:
         warned_name = message.reply_to_message.from_user.username if message.reply_to_message.from_user.username is not None else message.reply_to_message.from_user.first_name
         admin_name = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
 
-        # Получаем или создаем запись пользователя
-        user_record = User_listModel.get_or_none(User_listModel.user_id == user_id)
-        if user_record is None:
-            user_record = User_listModel.create(
-                user_id=user_id,
-                warn_count=1,
-                created_at=fn.now(),
-                last_visit=fn.now(),
+        # Обновляем/создаём warn_count
+        q = (
+            User_listModel
+            .insert({
+                User_listModel.created_at: fn.now(),
+                User_listModel.user_id: user_id,
+                User_listModel.last_visit: fn.now(),
+                User_listModel.warn_count: 1
+            })
+            .on_conflict(
+                conflict_target=[User_listModel.user_id],
+                update={User_listModel.warn_count: User_listModel.warn_count + 1, User_listModel.last_visit: fn.now()}
             )
-        else:
-            user_record.warn_count += 1
-            user_record.save()
+        )
+        q.execute()
+        # Получаем новое значение warn_count
+        user_record = User_listModel.get(User_listModel.user_id == user_id)
 
         # Проверяем количество предупреждений
         if user_record.warn_count >= 3:
@@ -834,8 +839,7 @@ async def warn_user(message: Message, bot: Bot) -> None:
                     parse_mode="HTML"
                 )
                 # Сбрасываем счетчик предупреждений
-                user_record.warn_count = 0
-                user_record.save()
+                User_listModel.update({User_listModel.warn_count: 0}).where(User_listModel.user_id == user_id).execute()
             except Exception as e:
                 logger.error(f"Ошибка при бане пользователя: {e}")
                 await message.reply("Не удалось удалить пользователя. Проверьте права бота.")
@@ -866,16 +870,15 @@ async def unwarn_user(message: Message, bot: Bot) -> None:
         user_name = message.reply_to_message.from_user.username if message.reply_to_message.from_user.username is not None else message.reply_to_message.from_user.first_name
         admin_name = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
 
-        # Получаем запись пользователя
+        # Сбрасываем счетчик предупреждений
+        q = User_listModel.update({User_listModel.warn_count: 0}).where(User_listModel.user_id == user_id)
+        updated = q.execute()
         user_record = User_listModel.get_or_none(User_listModel.user_id == user_id)
-        if user_record is None or user_record.warn_count == 0:
+        old_warn_count = user_record.warn_count if user_record else 0
+
+        if not user_record or old_warn_count == 0:
             await message.reply(f"У пользователя <b>{user_name}</b> нет предупреждений.", parse_mode="HTML")
             return
-
-        # Сбрасываем счетчик предупреждений
-        old_warn_count = user_record.warn_count
-        user_record.warn_count = 0
-        user_record.save()
 
         await message.reply(
             f"Администратор <b>{admin_name}</b> снял все предупреждения ({old_warn_count}) у пользователя <b>{user_name}</b>.",

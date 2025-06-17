@@ -192,36 +192,27 @@ def check_visit_streak(user_id: int) -> Tuple[bool, int]:
     """
     try:
         now = datetime.now(timezone.utc)
-        user = User_listModel.get_or_none(User_listModel.user_id == user_id)
-        
-        if user is None:
-            user = User_listModel.create(
-                user_id=user_id,
-                last_visit=fn.now(),
-                visit_streak=1,
-                created_at=fn.now()
+        # Обновляем/создаём visit_streak
+        q = (
+            User_listModel
+            .insert({
+                User_listModel.created_at: fn.now(),
+                User_listModel.user_id: user_id,
+                User_listModel.last_visit: now,
+                User_listModel.visit_streak: 1
+            })
+            .on_conflict(
+                conflict_target=[User_listModel.user_id],
+                update={User_listModel.last_visit: now, User_listModel.visit_streak: User_listModel.visit_streak + 1}
             )
-            return True, 1
-        
-        if user.last_visit is None:
-            user.last_visit = now
-            user.visit_streak = 1
-            user.save()
-            return True, 1
-        
+        )
+        q.execute()
+        user = User_listModel.get(User_listModel.user_id == user_id)
+        # Проверяем, новый ли это день
         if user.last_visit.date() == now.date():
             return False, user.visit_streak
-        
-        if user.last_visit.date() == (now - timedelta(days=1)).date():
-            user.visit_streak += 1
-            user.last_visit = now
-            user.save()
-            return True, user.visit_streak
         else:
-            user.visit_streak = 1
-            user.last_visit = now
-            user.save()
-            return True, 1
+            return True, user.visit_streak
     except Exception as e:
         logger.error(f"Ошибка в check_visit_streak для user_id {user_id}: {e}")
         return False, 0
