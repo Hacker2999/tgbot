@@ -192,35 +192,35 @@ def check_visit_streak(user_id: int) -> Tuple[bool, int]:
         Tuple[bool, int]: (is_new_day, streak) - является ли это новым днем и текущий винстрик
     """
     try:
-        today = datetime.now(timezone.utc).date()
+        now = datetime.now(timezone.utc)
         user = User_listModel.get_or_none(User_listModel.user_id == user_id)
         
         if user is None:
             user = User_listModel.create(
                 user_id=user_id,
-                last_visit=today,
+                last_visit=now,
                 visit_streak=1,
                 created_at=fn.now()
             )
             return True, 1
         
         if user.last_visit is None:
-            user.last_visit = today
+            user.last_visit = now
             user.visit_streak = 1
             user.save()
             return True, 1
         
-        if user.last_visit == today:
+        if user.last_visit.date() == now.date():
             return False, user.visit_streak
         
-        if user.last_visit == today - timedelta(days=1):
+        if user.last_visit.date() == (now - timedelta(days=1)).date():
             user.visit_streak += 1
-            user.last_visit = today
+            user.last_visit = now
             user.save()
             return True, user.visit_streak
         else:
             user.visit_streak = 1
-            user.last_visit = today
+            user.last_visit = now
             user.save()
             return True, 1
     except Exception as e:
