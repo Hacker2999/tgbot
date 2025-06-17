@@ -1,10 +1,9 @@
 from datetime import datetime, timezone, timedelta
-from typing import Optional, Dict, Tuple, List
+from typing import Dict, Tuple
 import logging
 import pytz
 import random
 from functools import lru_cache
-import json
 from pathlib import Path
 
 from peewee import fn
