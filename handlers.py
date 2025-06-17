@@ -117,7 +117,7 @@ async def handle_member_join(event: ChatMemberUpdated, bot: Bot) -> None:
                 })
                 .on_conflict(
                     conflict_target=[Chat_listModel.chat_id],
-                    update={User_listModel.created_at: fn.now()}
+                    update={}  # Не обновляем created_at
                 )
             )
             q.execute()
@@ -149,7 +149,7 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
                 })
                 .on_conflict(
                     conflict_target=[User_listModel.user_id],
-                    update={User_listModel.is_verified: True, User_listModel.created_at: fn.now()}
+                    update={User_listModel.is_verified: True, User_listModel.last_visit: fn.now()}
                 )
             ).execute()
             return  # Не показываем капчу
@@ -164,7 +164,7 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
             })
             .on_conflict(
                 conflict_target=[User_listModel.user_id],
-                update={User_listModel.is_verified: False, User_listModel.created_at: fn.now()}
+                update={User_listModel.is_verified: False, User_listModel.last_visit: fn.now()}
             )
         ).execute()
         # 2. Ограничить права пользователя (только чтение)

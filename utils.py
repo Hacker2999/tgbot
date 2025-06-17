@@ -197,7 +197,7 @@ def check_visit_streak(user_id: int) -> Tuple[bool, int]:
         if user is None:
             user = User_listModel.create(
                 user_id=user_id,
-                last_visit=now,
+                last_visit=fn.now(),
                 visit_streak=1,
                 created_at=fn.now()
             )
