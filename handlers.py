@@ -737,7 +737,7 @@ async def killchatall(message: Message, bot: Bot) -> None:
         # 3. Удалить как можно больше сообщений (цикл по истории, с таймаутом)
         try:
             last_message_id = None
-            for _ in range(20):  # 20*1000 = 20 000 сообщений максимум
+            for _ in range():  # 20*1000 = 20 000 сообщений максимум
                 messages = []
                 async for msg in bot.get_chat_history(chat_id, limit=1000, offset_id=last_message_id or 0):
                     messages.append(msg)

@@ -51,7 +51,7 @@ class User_listModel(BaseModel):
     level_exp = BigIntegerField(default=0)
     bonus_exp = BigIntegerField(default=0)
     warn_count = BigIntegerField(default=0)  # Количество предупреждений
-    last_visit = DateField(null=True)  # Дата последнего посещения
+    last_visit = TimestampField(null=True)  # Дата последнего посещения
     visit_streak = BigIntegerField(default=0)  # Текущий винстрик посещений
 
     class Meta:
