@@ -135,10 +135,16 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
     try:
         user_id = event.new_chat_member.user.id
         chat_id = event.chat.id
+
+        invite_link = getattr(event, "invite_link", None)
+        username = event.new_chat_member.user.username if event.new_chat_member.user.username is not None else event.new_chat_member.user.first_name
+        # Логируем вход по ссылке
+        if invite_link is not None:
+            logger.info(f"User {user_id} joined via invite link: {invite_link.invite_link}")
+
         # Проверяем, был ли пользователь уже в чате (например, вернулся после выхода)
         member = await bot.get_chat_member(chat_id, user_id)
         if getattr(member, 'status', None) not in ("left", "kicked"):
-            # Пользователь уже был в чате, не показываем капчу, просто выставляем is_verified=True
             (
                 User_listModel
                 .insert({
@@ -176,17 +182,17 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
         # 3. Сгенерировать капчу
         answers = CAPTCHA_ANSWERS.copy()
         random.shuffle(answers)
-        correct = "Я не бот"
         builder = InlineKeyboardBuilder()
         for ans in answers:
             builder.button(text=ans, callback_data=f"captcha_{ans}_{user_id}")
         markup = builder.as_markup()
-        username = event.new_chat_member.user.username if event.new_chat_member.user.username is not None else event.new_chat_member.user.first_name
-        # 4. Отправить капчу
+        # 4. Отправить капчу с учётом invite_link
+        welcome_text = f"<b>Привет, {username}!</b>\nПодтвердите, что вы не бот, нажав на правильную кнопку ниже. У вас 2 минуты."
+        if invite_link is not None:
+            welcome_text += f"\nВы зашли по ссылке-приглашению: {invite_link.invite_link}"
         captcha_msg = await bot.send_message(
             chat_id=chat_id,
-            text=f"<b>Привет, {username}!</b>!"\
-                "</b>\nПодтвердите, что вы не бот, нажав на правильную кнопку ниже. У вас 2 минуты.",
+            text=welcome_text,
             reply_markup=markup,
             parse_mode="HTML"
         )
@@ -195,7 +201,6 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
             await asyncio.sleep(CAPTCHA_TIMEOUT)
             # Проверить статус верификации
             user = User_listModel.select(User_listModel.is_verified).where(User_listModel.user_id == user_id).first()
-            username = event.new_chat_member.user.username if event.new_chat_member.user.username is not None else event.new_chat_member.user.first_name
             if not user or not user.is_verified:
                 try:
                     await bot.ban_chat_member(chat_id, user_id)
@@ -1007,7 +1012,8 @@ async def messages_counter(message: Message, bot: Bot) -> None:
                 conflict_target=[User_listModel.user_id],
                 update={
                     User_listModel.message_count: User_listModel.message_count + 1,
-                    User_listModel.level_exp: User_listModel.level_exp + 1
+                    User_listModel.level_exp: User_listModel.level_exp + 1,
+                    User_listModel.last_visit: fn.now()
                 }
             )
         )
