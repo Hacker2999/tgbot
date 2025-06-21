@@ -1023,16 +1023,15 @@ async def messages_counter(message: Message, bot: Bot) -> None:
 
         # Проверяем шанс получения бонусного опыта (5%)
         if random.random() < 0.05:
-            user = User_listModel.get_or_none(User_listModel.user_id == message.from_user.id)
-            if user:
-                bonus_exp = random.randint(100, 500)
-                user.bonus_exp += bonus_exp
-                user.save()
-                username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
-                await message.reply(
-                    f"🎲 <b>{username}</b> получает <b>{bonus_exp}</b> бонусного опыта за активность!",
-                    parse_mode="HTML"
-                )
+            bonus_exp = random.randint(100, 500)
+            User_listModel.update({
+                User_listModel.bonus_exp: User_listModel.bonus_exp + bonus_exp
+            }).where(User_listModel.user_id == message.from_user.id).execute()
+            username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
+            await message.reply(
+                f"🎲 <b>{username}</b> получает <b>{bonus_exp}</b> бонусного опыта за активность!",
+                parse_mode="HTML"
+            )
 
         # Обновляем статистику
         q = (
