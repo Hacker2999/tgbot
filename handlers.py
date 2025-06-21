@@ -336,7 +336,7 @@ async def stat(message: Message, bot: Bot) -> None:
     try:
         q = (
             User_listModel
-            .select(User_listModel.created_at, User_listModel.message_count, User_listModel.level_exp)
+            .select(User_listModel.created_at, User_listModel.message_count, User_listModel.level_exp, User_listModel.bonus_exp)
             .where(User_listModel.user_id == message.from_user.id)
             .first()
         )
@@ -347,9 +347,10 @@ async def stat(message: Message, bot: Bot) -> None:
             minutes = (time_withus.seconds % 3600) // 60
             username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
             
-            current_level = calculate_level(q.level_exp)
+            total_exp = q.level_exp + q.bonus_exp
+            current_level = calculate_level(total_exp)
             next_level_exp = calculate_exp_for_level(current_level + 1)
-            exp_to_next = next_level_exp - q.level_exp
+            exp_to_next = next_level_exp - total_exp
             user_rank = get_user_rank(current_level)
             
             current_messages = q.message_count
@@ -363,7 +364,7 @@ async def stat(message: Message, bot: Bot) -> None:
                     f"С нами: {days} дн., {hours} ч., {minutes} мин.\n"
                     f"Уровень: {current_level}\n"
                     f"Звание: {user_rank}\n"
-                    f"Опыт: {q.level_exp}/{next_level_exp} (+{exp_to_next} до следующего уровня)\n"
+                    f"Опыт: {total_exp}/{next_level_exp} (+{exp_to_next} до следующего уровня)\n"
                 )
             )
         else:
