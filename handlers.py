@@ -474,9 +474,41 @@ async def del_button(message: Message, bot: Bot) -> None:
         logger.error(f"Ошибка в del_button: {e}")
         await message.reply("Ошибка при удалении кнопки.")
 
+@router.message(Command("add_rules"))
+async def add_rules(message: Message, bot: Bot) -> None:
+    if not await is_admin(bot, message.chat.id, message.from_user.id):
+        await message.reply("Только администратор может использовать эту команду.")
+        return
+    try:
+        if message.reply_to_message and message.reply_to_message.text:
+            rules_text = message.reply_to_message.text
+        else:
+            await message.reply("Ответьте на сообщение с текстом правил.")
+            return
+        from model import TextModel
+        # Обновить или вставить правила
+        q = (
+            TextModel
+            .insert({
+                TextModel.target: "rules",
+                TextModel.text_of: rules_text,
+                TextModel.edited_at: datetime.now()
+            })
+            .on_conflict(
+                conflict_target=[TextModel.target],
+                update={TextModel.text_of: rules_text, TextModel.edited_at: datetime.now()}
+            )
+        )
+        q.execute()
+        await message.reply("Правила успешно обновлены!")
+    except Exception as e:
+        logger.error(f"Ошибка в add_rules: {e}")
+        await message.reply("Ошибка при сохранении правил.")
+
 @router.message(Command("rules"))
 async def send_rules(message: Message) -> None:
     try:
+        from model import TextModel
         q = (
             TextModel
             .select(TextModel.text_of)
@@ -686,6 +718,7 @@ async def help_command(message: Message) -> None:
         "<b>/set_bye</b> — Изменить прощание (ответом на сообщение или текстом)\n"
         "<b>/add_button</b> — Добавить кнопку в /links. Пример: <code>/add_button Название - https://ссылка;</code>\n"
         "<b>/del_button</b> — Удалить кнопку из /links. Пример: <code>/del_button Название;</code>\n"
+        "<b>/add_rules</b> — Добавить или обновить правила чата (ответом на сообщение с текстом)\n"
         "<b>/m</b> — Мут пользователя (ответом на сообщение, можно указать срок: <code>/m 10m</code>)\n"
         "<b>/b</b> — Бан пользователя (ответом на сообщение, можно указать срок: <code>/b 1d</code>)\n"
         "\n"
