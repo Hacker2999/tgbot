@@ -183,36 +183,41 @@ def get_user_rank(level: int) -> str:
 def check_visit_streak(user_id: int) -> Tuple[bool, int]:
     """
     Проверяет и обновляет винстрик посещений пользователя.
-    
-    Args:
-        user_id (int): ID пользователя
-        
-    Returns:
-        Tuple[bool, int]: (is_new_day, streak) - является ли это новым днем и текущий винстрик
+    Returns: (is_new_day, streak)
     """
     try:
-        # Используем fn.now() для last_visit, чтобы не было ошибки типа
-        q = (
-            User_listModel
-            .insert({
+        now = datetime.now(timezone.utc)
+        user = User_listModel.get_or_none(User_listModel.user_id == user_id)
+        if user is None:
+            User_listModel.insert({
                 User_listModel.created_at: fn.now(),
                 User_listModel.user_id: user_id,
                 User_listModel.last_visit: fn.now(),
                 User_listModel.visit_streak: 1
-            })
-            .on_conflict(
-                conflict_target=[User_listModel.user_id],
-                update={User_listModel.last_visit: fn.now(), User_listModel.visit_streak: User_listModel.visit_streak + 1}
-            )
-        )
-        q.execute()
-        user = User_listModel.get(User_listModel.user_id == user_id)
-        now = datetime.now(timezone.utc)
-        # Проверяем, новый ли это день
-        if user.last_visit.date() == now.date():
+            }).execute()
+            return True, 1
+
+        last_visit = user.last_visit
+        if last_visit is None or (now.date() - last_visit.date()).days > 1:
+            # streak сбрасывается
+            User_listModel.update({
+                User_listModel.last_visit: fn.now(),
+                User_listModel.visit_streak: 1
+            }).where(User_listModel.user_id == user_id).execute()
+            return True, 1
+        elif last_visit.date() == now.date():
+            # streak не увеличивается
             return False, user.visit_streak
+        elif last_visit.date() == (now - timedelta(days=1)).date():
+            # streak увеличивается
+            User_listModel.update({
+                User_listModel.last_visit: fn.now(),
+                User_listModel.visit_streak: user.visit_streak + 1
+            }).where(User_listModel.user_id == user_id).execute()
+            return True, user.visit_streak + 1
         else:
-            return True, user.visit_streak
+            # fallback
+            return False, user.visit_streak
     except Exception as e:
         logger.error(f"Ошибка в check_visit_streak для user_id {user_id}: {e}")
         return False, 0
@@ -255,9 +260,7 @@ async def award_size_top_exp(bot, chat_id: int) -> None:
             if idx in rewards:
                 user = User_listModel.get_or_none(User_listModel.user_id == result.user_id)
                 if user:
-                    user.bonus_exp += rewards[idx]
-                    user.save()
-                    
+                    User_listModel.update({User_listModel.bonus_exp: User_listModel.bonus_exp + rewards[idx]}).where(User_listModel.user_id == result.user_id).execute()
                     try:
                         member = await bot.get_chat_member(chat_id, result.user_id)
                         username = member.user.username if member.user.username is not None else member.user.first_name
