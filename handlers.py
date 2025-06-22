@@ -680,7 +680,19 @@ async def roulette(message: Message, bot: Bot) -> None:
         # 3. Проверяем результат
         win = (dice_value > border) if condition == "больше" else (dice_value < border)
         if win:
-            await message.reply("Победа за вами")
+            # Начисляем бонусный опыт
+            bonus_exp = 20 * mute_minutes
+            user = User_listModel.get_or_none(User_listModel.user_id == message.from_user.id)
+            if not user:
+                User_listModel.insert({
+                    User_listModel.created_at: fn.now(),
+                    User_listModel.user_id: message.from_user.id,
+                    User_listModel.bonus_exp: bonus_exp,
+                    User_listModel.last_visit: fn.now(),
+                }).execute()
+            else:
+                User_listModel.update({User_listModel.bonus_exp: User_listModel.bonus_exp + bonus_exp}).where(User_listModel.user_id == message.from_user.id).execute()
+            await message.reply(f"Победа за вами! 🎉\nВы получаете <b>{bonus_exp}</b> бонусного опыта за игру в рулетку.", parse_mode="HTML")
         else:
             # Мутим пользователя
             until_date = datetime.now() + timedelta(minutes=mute_minutes)
