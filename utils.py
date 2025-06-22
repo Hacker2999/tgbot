@@ -26,7 +26,7 @@ RANKS_CACHE: Dict[int, str] = {}
 def quota_check(userid: int, qcount: int) -> bool:
     """
     Проверяет, превысил ли пользователь дневной лимит анекдотов.
-    Если лимит превышен и прошёл день с последнего запроса, сбрасывает счётчик.
+    Если лимит превышен и прошёл день с последнего запроса (по МСК), сбрасывает счётчик.
     Возвращает True, если пользователь может получить анекдот, иначе False.
     
     Args:
@@ -46,14 +46,14 @@ def quota_check(userid: int, qcount: int) -> bool:
             return True
             
         recent_time = q.created_at
-        now = datetime.now(timezone.utc)
-        
+        MSK = pytz.timezone("Europe/Moscow")
+        # Приводим к МСК
         if recent_time.tzinfo is None:
             recent_time = recent_time.replace(tzinfo=timezone.utc)
-            
-        days_passed = (now - recent_time).days
+        recent_time_msk = recent_time.astimezone(MSK).date()
+        now_msk = datetime.now(MSK).date()
         
-        if days_passed >= 1:
+        if now_msk > recent_time_msk:
             q2 = (
                 AnekModel
                 .update({AnekModel.count: 0})
