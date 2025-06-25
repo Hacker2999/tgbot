@@ -701,6 +701,8 @@ async def roulette(message: Message, bot: Bot) -> None:
         if win:
             # Начисляем бонусный опыт
             bonus_exp = 20 * mute_minutes
+            if bonus_exp > 500:
+                bonus_exp = 500
             user = User_listModel.get_or_none(User_listModel.user_id == message.from_user.id)
             if not user:
                 User_listModel.insert({
@@ -1047,13 +1049,18 @@ async def messages_counter(message: Message, bot: Bot) -> None:
         is_new_day, streak = check_visit_streak(message.from_user.id)
         if is_new_day and streak > 1:
             username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
+            # Начисляем опыт за винстрик
+            streak_exp = 10 * streak
+            User_listModel.update({
+                User_listModel.level_exp: User_listModel.level_exp + streak_exp
+            }).where(User_listModel.user_id == message.from_user.id).execute()
             await message.reply(
-                f"🎉 <b>{username}</b>, в чате {streak}-й день подряд!",
+                f"🎉 <b>{username}</b>, в чате {streak}-й день подряд!\nВы получаете <b>{streak_exp}</b> опыта за активность!",
                 parse_mode="HTML"
             )
 
-        # Проверяем шанс получения бонусного опыта (5%)
-        if random.random() < 0.005:
+        # Проверяем шанс получения бонусного опыта (3%)
+        if random.random() < 0.03:
             bonus_exp = random.randint(100, 500)
             User_listModel.update({
                 User_listModel.bonus_exp: User_listModel.bonus_exp + bonus_exp
