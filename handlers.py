@@ -362,10 +362,11 @@ async def stat(message: Message, bot: Bot) -> None:
             
             total_exp = q.level_exp + q.bonus_exp
             current_level = calculate_level(total_exp)
-            next_level_exp = calculate_exp_for_level(current_level + 1)
-            exp_to_next = next_level_exp - total_exp
+            exp_for_current = calculate_exp_for_level(current_level)
+            exp_for_next = calculate_exp_for_level(current_level + 1)
+            exp_in_level = total_exp - exp_for_current
+            exp_to_next = exp_for_next - total_exp
             user_rank = get_user_rank(current_level)
-            
             current_messages = q.message_count
             next_level_messages = calculate_messages_for_level(current_level + 1)
             
@@ -377,7 +378,7 @@ async def stat(message: Message, bot: Bot) -> None:
                     f"С нами: {days} дн., {hours} ч., {minutes} мин.\n"
                     f"Уровень: {current_level}\n"
                     f"Звание: {user_rank}\n"
-                    f"Опыт: {total_exp}/{next_level_exp} (+{exp_to_next} до следующего уровня)\n"
+                    f"Опыт: {exp_in_level}/{exp_for_next - exp_for_current} (+{exp_to_next} до следующего уровня)\n"
                 )
             )
         else:
