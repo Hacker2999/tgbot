@@ -364,6 +364,11 @@ async def stat(message: Message, bot: Bot) -> None:
             current_level = calculate_level(total_exp)
             exp_for_current = calculate_exp_for_level(current_level)
             exp_for_next = calculate_exp_for_level(current_level + 1)
+            # Корректируем уровень, если опыта больше, чем нужно для следующего уровня
+            while total_exp >= exp_for_next and current_level < 20:
+                current_level += 1
+                exp_for_current = calculate_exp_for_level(current_level)
+                exp_for_next = calculate_exp_for_level(current_level + 1)
             exp_in_level = total_exp - exp_for_current
             exp_to_next = exp_for_next - total_exp
             user_rank = get_user_rank(current_level)
