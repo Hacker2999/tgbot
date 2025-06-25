@@ -56,12 +56,6 @@ class User_listModel(BaseModel):
 
     class Meta:
         table_name = 'user_list'
-        indexes = (
-            (('user_id',), True),  # Уникальный индекс
-            (('message_count',), False),  # Индекс для сортировки
-            (('level_exp',), False),  # Индекс для сортировки
-            (('last_visit',), False),  # Индекс для проверки винстрика
-        )
 
 class Chat_listModel(BaseModel):
     id = BigAutoField(primary_key=True)
@@ -70,9 +64,6 @@ class Chat_listModel(BaseModel):
 
     class Meta:
         table_name = 'chat_list'
-        indexes = (
-            (('chat_id',), True),  # Уникальный индекс
-        )
 
 class Button_listModel(BaseModel):
     id = BigAutoField(primary_key=True)  # bigint, генерируется по умолчанию как identity
@@ -81,10 +72,6 @@ class Button_listModel(BaseModel):
 
     class Meta:
         table_name = 'button_list'
-        indexes = (
-            (('button_name',), False),  # Индекс для поиска по имени
-            (('button_link',), True),  # Уникальный индекс
-        )
 
 class SizeModel(BaseModel):
     id = BigAutoField(primary_key=True)
@@ -94,7 +81,3 @@ class SizeModel(BaseModel):
 
     class Meta:
         table_name = 'size_list'
-        indexes = (
-            (('user_id', 'date'), True),  # Уникальный составной индекс
-            (('date', 'size'), False),  # Индекс для сортировки по размеру за дату
-        )

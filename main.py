@@ -52,7 +52,7 @@ async def schedule_awards(bot: Bot, chat_id: int):
         try:
             moscow_tz = pytz.timezone('Europe/Moscow')
             now = datetime.now(moscow_tz)
-            target_time = time(20, 0)  # 20:00
+            target_time = time(18, 00)  # 20:00
             
             # Если текущее время больше 20:00, ждем до следующего дня
             if now.time() > target_time:

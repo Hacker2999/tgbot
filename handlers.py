@@ -141,6 +141,19 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
         # Логируем вход по ссылке
         if invite_link is not None:
             logger.info(f"User {user_id} joined via invite link: {invite_link.invite_link}")
+            q = (
+                TextModel
+                .select(TextModel.text_of)
+                .where(TextModel.target == "welcome_message")
+                .first()
+            )
+            WELCOME_MESSAGE = q.text_of if q else "Добро пожаловать!"
+            username = event.from_user.username if event.from_user.username is not None else event.from_user.first_name
+            await bot.send_message(
+                chat_id=chat_id,
+                text=f"{username}, {WELCOME_MESSAGE}!"
+            )
+
 
         # Проверяем, был ли пользователь уже в чате (например, вернулся после выхода)
         member = await bot.get_chat_member(chat_id, user_id)
@@ -493,11 +506,11 @@ async def add_rules(message: Message, bot: Bot) -> None:
             .insert({
                 TextModel.target: "rules",
                 TextModel.text_of: rules_text,
-                TextModel.edited_at: datetime.now()
+                TextModel.edited_at: fn.now()
             })
             .on_conflict(
                 conflict_target=[TextModel.target],
-                update={TextModel.text_of: rules_text, TextModel.edited_at: datetime.now()}
+                update={TextModel.text_of: rules_text, TextModel.edited_at: fn.now()}
             )
         )
         q.execute()
@@ -1034,7 +1047,7 @@ async def messages_counter(message: Message, bot: Bot) -> None:
             )
 
         # Проверяем шанс получения бонусного опыта (5%)
-        if random.random() < 0.05:
+        if random.random() < 0.005:
             bonus_exp = random.randint(100, 500)
             User_listModel.update({
                 User_listModel.bonus_exp: User_listModel.bonus_exp + bonus_exp
