@@ -722,6 +722,9 @@ async def roulette(message: Message, bot: Bot) -> None:
             else:
                 User_listModel.update({User_listModel.bonus_exp: User_listModel.bonus_exp + bonus_exp}).where(User_listModel.user_id == message.from_user.id).execute()
             await message.reply(f"Победа за вами! 🎉\nВы получаете <b>{bonus_exp}</b> бонусного опыта за игру в рулетку.", parse_mode="HTML")
+            # Проверяем повышение уровня после награды за рулетку
+            username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
+            await check_level_up(message.from_user.id, username, message)
         else:
             # Мутим пользователя
             until_date = datetime.now() + timedelta(minutes=mute_minutes)
@@ -1118,6 +1121,8 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
                 f"🎉 <b>{username}</b>, в чате {streak}-й день подряд!\nВы получаете <b>{streak_exp}</b> опыта за активность!",
                 parse_mode="HTML"
             )
+            # Проверяем повышение уровня после винстрика
+            await check_level_up(user_id, username, message)
 
         # Проверяем шанс получения бонусного опыта (1%)
         if random.random() < 0.01:
@@ -1130,11 +1135,52 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
                 f"🎲 <b>{username}</b> получает <b>{bonus_exp}</b> бонусного опыта за активность!",
                 parse_mode="HTML"
             )
+            # Проверяем повышение уровня после бонусного опыта
+            await check_level_up(user_id, username, message)
 
         # Начисляем опыт за сообщение
         User_listModel.update({
             User_listModel.level_exp: User_listModel.level_exp + 1
         }).where(User_listModel.user_id == user_id).execute()
         
+        # Проверяем повышение уровня после базового опыта
+        username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
+        await check_level_up(user_id, username, message)
+        
     except Exception as e:
         logger.error(f"Ошибка в handle_all_messages для user_id {message.from_user.id}: {e}")
+
+async def check_level_up(user_id: int, username: str, message: Message) -> None:
+    """
+    Проверяет повышение уровня пользователя и отправляет уведомление.
+    
+    Args:
+        user_id (int): ID пользователя
+        username (str): Имя пользователя
+        message (Message): Сообщение для ответа
+    """
+    try:
+        user_record = User_listModel.get(User_listModel.user_id == user_id)
+        total_exp = user_record.level_exp + user_record.bonus_exp
+        current_level = calculate_level(total_exp)
+        
+        # Получаем предыдущий уровень для сравнения
+        previous_exp = total_exp - 1  # Опыт до начисления
+        previous_level = calculate_level(previous_exp)
+        
+        # Если уровень повысился
+        if current_level > previous_level:
+            new_rank = get_user_rank(current_level)
+            
+            # Формируем сообщение о повышении уровня
+            level_up_message = (
+                f"🎉 <b>Поздравляем, {username}!</b>\n\n"
+                f"🎯 Вы достигли <b>{current_level}-го уровня</b>!\n"
+                f"🏆 Новое звание: <b>{new_rank}</b>\n"
+                f"⭐ Опыт: <b>{total_exp}</b>\n\n"
+                f"Продолжайте быть активными! 🚀"
+            )
+            
+            await message.reply(level_up_message, parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"Ошибка при проверке повышения уровня для user_id {user_id}: {e}")
