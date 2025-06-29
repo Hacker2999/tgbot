@@ -125,7 +125,9 @@ def calculate_exp_for_level(level: int) -> int:
         return MAX_EXP
         
     try:
-        return int(BASE_EXP + BASE_DIFF*(level-1) + (DIFF_INCREASE/2)*(level-1)*(level-2))
+        result = int(BASE_EXP + BASE_DIFF*(level-1) + (DIFF_INCREASE/2)*(level-1)*(level-2))
+        logger.info(f"DEBUG: calculate_exp_for_level({level}) = {result}")
+        return result
     except Exception as e:
         logger.error(f"Ошибка в calculate_exp_for_level для level {level}: {e}")
         return 0
@@ -439,6 +441,14 @@ async def award_exp_and_check_level_up(user_id: int, level_exp_amount: int, bonu
         total_exp_to_award = level_exp_amount + bonus_exp_amount
         new_total_exp = current_total_exp + total_exp_to_award
         new_level = calculate_level(new_total_exp)
+        
+        # Корректируем уровень, если опыта больше, чем нужно для следующего уровня (как в команде /stat)
+        exp_for_current = calculate_exp_for_level(new_level)
+        exp_for_next = calculate_exp_for_level(new_level + 1)
+        while new_total_exp >= exp_for_next and new_level < 20:
+            new_level += 1
+            exp_for_current = calculate_exp_for_level(new_level)
+            exp_for_next = calculate_exp_for_level(new_level + 1)
         
         logger.info(f"DEBUG: После начисления опыта:")
         logger.info(f"DEBUG: total_exp_to_award = {total_exp_to_award}")
