@@ -1196,7 +1196,11 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
                     "wins": 0,
                     "messages": []
                 }
-            
+            # Удаляем меню выбора игры
+            try:
+                await call.message.delete()
+            except Exception:
+                pass
             # Начинаем/продолжаем игру
             await start_burmalda_game(call, bot, user_id, game_type)
             
@@ -1384,6 +1388,7 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
 async def finish_burmalda_game(call: CallbackQuery, bot: Bot) -> None:
     """Завершает игру в Burmalda и начисляет награды"""
     try:
+        await call.answer()  # Сразу убираем "часики" у пользователя
         user_id = int(call.data.split("_")[2])
         
         # Проверяем, что callback отправил тот же пользователь
@@ -1449,8 +1454,6 @@ async def finish_burmalda_game(call: CallbackQuery, bot: Bot) -> None:
             del burmalda_game.active_games[user_id]
         # Fallback: если где-то ещё есть состояния, сбросить их (расширяем при необходимости)
         # Например, если есть другие dict-ы сессий: burmalda_game.some_other_state.pop(user_id, None)
-        
-        await call.answer()
         
     except Exception as e:
         logger.error(f"Ошибка в finish_burmalda_game: {e}")
