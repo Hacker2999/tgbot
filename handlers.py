@@ -342,10 +342,6 @@ async def stat(message: Message, bot: Bot) -> None:
             current_messages = q.message_count
             next_level_messages = calculate_messages_for_level(current_level + 1)
             
-            logger.info(f"DEBUG: Команда /stat для user_id {message.from_user.id}:")
-            logger.info(f"DEBUG: level_exp = {q.level_exp}, bonus_exp = {q.bonus_exp}, total_exp = {total_exp}")
-            logger.info(f"DEBUG: calculated_level = {calculate_level(total_exp)}, final_level = {current_level}")
-            
             await bot.send_message(
                 chat_id=message.chat.id,
                 text=(
@@ -1119,8 +1115,6 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
         level_exp_to_award = 0
         bonus_exp_to_award = 0
         
-        logger.info(f"DEBUG: Обработка сообщения от user_id {user_id}")
-        
         # Проверяем винстрик
         is_new_day, streak = check_visit_streak(user_id)
         if is_new_day and streak > 1:
@@ -1128,7 +1122,6 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
             streak_exp = 10 * streak
             level_exp_to_award += streak_exp
             total_exp_to_award += streak_exp
-            logger.info(f"DEBUG: Винстрик {streak} дней, добавляем {streak_exp} level опыта")
             
             await message.reply(
                 f"🎉 <b>{username}</b>, в чате {streak}-й день подряд!\nВы получаете <b>{streak_exp}</b> опыта за активность!",
@@ -1140,7 +1133,6 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
             bonus_exp = random.randint(10, 100)
             bonus_exp_to_award += bonus_exp
             total_exp_to_award += bonus_exp
-            logger.info(f"DEBUG: Выпал бонусный опыт {bonus_exp}")
             
             await message.reply(
                 f"🎲 <b>{username}</b> получает <b>{bonus_exp}</b> бонусного опыта за активность!",
@@ -1150,9 +1142,6 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
         # Начисляем опыт за сообщение
         level_exp_to_award += 1
         total_exp_to_award += 1
-        logger.info(f"DEBUG: Добавляем 1 level опыт за сообщение")
-        
-        logger.info(f"DEBUG: Итого к начислению: level_exp = {level_exp_to_award}, bonus_exp = {bonus_exp_to_award}, total = {total_exp_to_award}")
         
         # Начисляем весь накопленный опыт и проверяем повышение уровня
         if total_exp_to_award > 0:
