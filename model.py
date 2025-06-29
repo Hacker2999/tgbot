@@ -53,6 +53,7 @@ class User_listModel(BaseModel):
     warn_count = BigIntegerField(default=0)  # Количество предупреждений
     last_visit = TimestampField(null=True)  # Дата последнего посещения
     visit_streak = BigIntegerField(default=0)  # Текущий винстрик посещений
+    rank = BigIntegerField(null=False,default=1)  # Текущий уровень
 
     class Meta:
         table_name = 'user_list'
