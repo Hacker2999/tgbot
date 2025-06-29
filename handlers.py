@@ -142,6 +142,7 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
                 User_listModel.user_id: user_id,
                 User_listModel.is_verified: False,
                 User_listModel.last_visit: fn.now(),
+                User_listModel.rank: 1,  # Начальный уровень
             })
             .on_conflict(
                 conflict_target=[User_listModel.user_id],
@@ -718,6 +719,7 @@ async def roulette(message: Message, bot: Bot) -> None:
                     User_listModel.user_id: message.from_user.id,
                     User_listModel.bonus_exp: bonus_exp,
                     User_listModel.last_visit: fn.now(),
+                    User_listModel.rank: 1,  # Начальный уровень
                 }).execute()
             else:
                 User_listModel.update({User_listModel.bonus_exp: User_listModel.bonus_exp + bonus_exp}).where(User_listModel.user_id == message.from_user.id).execute()
@@ -913,7 +915,8 @@ async def warn_user(message: Message, bot: Bot) -> None:
                 User_listModel.created_at: fn.now(),
                 User_listModel.user_id: user_id,
                 User_listModel.last_visit: fn.now(),
-                User_listModel.warn_count: 1
+                User_listModel.warn_count: 1,
+                User_listModel.rank: 1,  # Начальный уровень
             })
             .on_conflict(
                 conflict_target=[User_listModel.user_id],
@@ -1090,6 +1093,7 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
                 User_listModel.user_id: user_id,
                 User_listModel.message_count: 1,
                 User_listModel.last_visit: fn.now(),
+                User_listModel.rank: 1,  # Начальный уровень
             })
             .on_conflict(
                 conflict_target=[User_listModel.user_id],
@@ -1164,13 +1168,17 @@ async def check_level_up(user_id: int, username: str, message: Message) -> None:
         total_exp = user_record.level_exp + user_record.bonus_exp
         current_level = calculate_level(total_exp)
         
-        # Получаем предыдущий уровень для сравнения
-        previous_exp = total_exp - 1  # Опыт до начисления
-        previous_level = calculate_level(previous_exp)
+        # Сравниваем с сохраненным уровнем в БД
+        saved_level = user_record.rank
         
         # Если уровень повысился
-        if current_level > previous_level:
+        if current_level > saved_level:
             new_rank = get_user_rank(current_level)
+            
+            # Обновляем уровень в БД
+            User_listModel.update({
+                User_listModel.rank: current_level
+            }).where(User_listModel.user_id == user_id).execute()
             
             # Формируем сообщение о повышении уровня
             level_up_message = (

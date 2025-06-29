@@ -200,7 +200,8 @@ def check_visit_streak(user_id: int) -> Tuple[bool, int]:
                 User_listModel.created_at: fn.now(),
                 User_listModel.user_id: user_id,
                 User_listModel.last_visit: fn.now(),
-                User_listModel.visit_streak: 1
+                User_listModel.visit_streak: 1,
+                User_listModel.rank: 1  # Начальный уровень
             }).execute()
             return True, 1
 
@@ -272,6 +273,7 @@ async def award_size_top_exp(bot, chat_id: int) -> None:
                         User_listModel.user_id: result.user_id,
                         User_listModel.bonus_exp: 0,
                         User_listModel.last_visit: fn.now(),
+                        User_listModel.rank: 1  # Начальный уровень
                     }).execute()
                 # Теперь начисляем награду
                 User_listModel.update({User_listModel.bonus_exp: User_listModel.bonus_exp + rewards[idx]}).where(User_listModel.user_id == result.user_id).execute()
