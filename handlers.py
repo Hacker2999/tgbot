@@ -1323,14 +1323,9 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
             if "player_cards" not in game_state:
                 import random
                 cards = list(range(2, 11)) + [10, 10, 10]  # 2-10, J, Q, K = 10
-                aces = [11]
+                # Классика: только две карты игроку и две дилеру
                 player_cards = [random.choice(cards), random.choice(cards)]
                 dealer_cards = [random.choice(cards), random.choice(cards)]
-                # 25% шанс получить туза
-                if random.random() < 0.25:
-                    player_cards.append(random.choice(aces))
-                if random.random() < 0.25:
-                    dealer_cards.append(random.choice(aces))
                 game_state["player_cards"] = player_cards
                 game_state["dealer_cards"] = dealer_cards
                 game_state["game_over"] = False
