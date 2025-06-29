@@ -44,7 +44,6 @@ WARN_REMOVAL_COST = 50
 
 class GameType(Enum):
     ROULETTE = "roulette"
-    DICE = "dice"
     SLOT = "slot"
     BLACKJACK = "blackjack"
 
@@ -271,45 +270,6 @@ class BurmaldaGame:
             logger.error(f"Ошибка в игре рулетка для user_id {user_id}: {e}")
             return GameResult(won=False, message="❌ Ошибка в игре")
     
-    async def play_dice_game(self, user_id: int, dice_value: int = None) -> GameResult:
-        """Игра в кости"""
-        try:
-            # Бот выбирает условие
-            condition = random.choice(["четное", "нечетное", "больше 3", "меньше 4"])
-            
-            # Используем переданное значение или генерируем случайное
-            if dice_value is None:
-                dice_value = random.randint(1, 6)
-            
-            # Проверяем результат
-            won = False
-            if condition == "четное":
-                won = dice_value % 2 == 0
-            elif condition == "нечетное":
-                won = dice_value % 2 == 1
-            elif condition == "больше 3":
-                won = dice_value > 3
-            elif condition == "меньше 4":
-                won = dice_value < 4
-            
-            message = (
-                f"🎯 <b>Кости</b>\n\n"
-                f"Условие: {condition}\n"
-                f"Выпало: {dice_value}\n\n"
-                f"{'🎉 Победа!' if won else '❌ Проигрыш'}"
-            )
-            
-            return GameResult(
-                won=won,
-                message=message,
-                dice_value=dice_value,
-                condition=condition
-            )
-            
-        except Exception as e:
-            logger.error(f"Ошибка в игре кости для user_id {user_id}: {e}")
-            return GameResult(won=False, message="❌ Ошибка в игре")
-    
     async def play_slot_game(self, user_id: int, slot_value: int = None) -> GameResult:
         """Игра в слоты"""
         try:
@@ -421,11 +381,10 @@ class BurmaldaGame:
         
         builder = InlineKeyboardBuilder()
         builder.button(text="🎲 Рулетка", callback_data=f"burmalda_game_roulette_{user_id}")
-        builder.button(text="🎯 Кости", callback_data=f"burmalda_game_dice_{user_id}")
         builder.button(text="Слоты", callback_data=f"burmalda_game_slot_{user_id}")
         builder.button(text="🃏 Блэкджек", callback_data=f"burmalda_game_blackjack_{user_id}")
         builder.button(text="🏪 Магазин", callback_data=f"burmalda_shop_{user_id}")
-        builder.adjust(2, 2, 1)
+        builder.adjust(2, 1, 1)
         
         return text, builder.as_markup()
     

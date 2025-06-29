@@ -1117,7 +1117,9 @@ async def burmalda_command(message: Message, bot: Bot) -> None:
 
 @router.callback_query(F.data.startswith("burmalda_"))
 async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
-    """Обработчик всех callback'ов системы Burmalda"""
+    # Если это завершение игры, не обрабатываем здесь, а даём сработать finish_burmalda_game
+    if call.data.startswith("burmalda_finish_"):
+        return
     try:
         data = call.data.split("_")
         if len(data) < 3:
@@ -1167,7 +1169,12 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             # Проверяем, есть ли уже активная игра
             game_state = burmalda_game.active_games.get(user_id)
             
-            if not game_state:
+            if game_state:
+                # Если тип игры отличается, не даём начать новую
+                if game_state.get("game_type") != game_type:
+                    await call.answer("Сначала завершите текущую игру!", show_alert=True)
+                    return
+            else:
                 # Начинаем новую игру - проверяем кредиты
                 credits = burmalda_game.get_user_credits(user_id)
                 if credits < GAME_COST:
@@ -1321,7 +1328,6 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
             # Отправляем стикер
             sticker_emoji = {
                 "roulette": "🎲",
-                "dice": "🎯",
                 "slot": "🎰",
                 "blackjack": "🃏"
             }.get(game_type, "🎮")
@@ -1331,8 +1337,6 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
             )
             if game_type == "roulette":
                 result = await burmalda_game.play_roulette_game(user_id, sticker_msg.dice.value)
-            elif game_type == "dice":
-                result = await burmalda_game.play_dice_game(user_id, sticker_msg.dice.value)
             elif game_type == "blackjack":
                 result = await burmalda_game.play_blackjack_game(user_id)
             else:
