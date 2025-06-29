@@ -1548,9 +1548,148 @@ async def blackjack_stand_callback(call: CallbackQuery, bot: Bot) -> None:
     await process_blackjack_stand(call, bot)
 
 async def process_blackjack_hit(call: CallbackQuery, bot: Bot) -> None:
-    # TODO: Реализация обработки взятия карты игроком
-    await call.answer("Взять карту (ещё не реализовано)")
+    user_id = int(call.data.split('_')[-1])
+    game_state = burmalda_game.active_games.get(user_id)
+    if not game_state or game_state.get("game_over"):
+        await call.answer("Игра уже завершена или не найдена", show_alert=True)
+        return
+    # Добавляем карту игроку
+    cards = list(range(2, 11)) + [10, 10, 10]  # 2-10, J, Q, K = 10
+    aces = [11]
+    card = random.choice(cards + aces)
+    game_state["player_cards"].append(card)
+    # Считаем очки
+    player_cards = game_state["player_cards"]
+    player_score = sum(player_cards)
+    while player_score > 21 and 11 in player_cards:
+        player_cards[player_cards.index(11)] = 1
+        player_score = sum(player_cards)
+    dealer_visible = game_state["dealer_cards"][0]
+    # Проверка на перебор
+    if player_score > 21:
+        game_state["game_over"] = True
+        # Показываем финал
+        await show_blackjack_final(call, bot, user_id, player_bust=True)
+        return
+    # Иначе продолжаем игру
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Взять карту", callback_data=f"blackjack_hit_{user_id}")
+    builder.button(text="Стоп", callback_data=f"blackjack_stand_{user_id}")
+    builder.adjust(2)
+    player_cards_str = ", ".join(map(str, player_cards))
+    text = (
+        f"🃏 <b>Блэкджек</b>\n\n"
+        f"Ваши карты: {player_cards_str}\n"
+        f"Ваши очки: <b>{player_score}</b>\n\n"
+        f"Карта дилера: {dealer_visible}, ?\n"
+    )
+    # Редактируем последнее сообщение
+    try:
+        last_msg_id = game_state["messages"][-1]
+        await bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=last_msg_id,
+            text=text,
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML"
+        )
+    except Exception:
+        # Если не удалось — отправляем новое
+        new_message = await bot.send_message(
+            chat_id=call.message.chat.id,
+            text=text,
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML"
+        )
+        game_state["messages"].append(new_message.message_id)
+    await call.answer()
 
 async def process_blackjack_stand(call: CallbackQuery, bot: Bot) -> None:
-    # TODO: Реализация обработки завершения хода игрока
-    await call.answer("Стоп (ещё не реализовано)")
+    user_id = int(call.data.split('_')[-1])
+    game_state = burmalda_game.active_games.get(user_id)
+    if not game_state or game_state.get("game_over"):
+        await call.answer("Игра уже завершена или не найдена", show_alert=True)
+        return
+    # Дилер доигрывает
+    dealer_cards = game_state["dealer_cards"]
+    player_cards = game_state["player_cards"]
+    player_score = sum(player_cards)
+    while player_score > 21 and 11 in player_cards:
+        player_cards[player_cards.index(11)] = 1
+        player_score = sum(player_cards)
+    dealer_score = sum(dealer_cards)
+    while dealer_score < 17:
+        card = random.choice(list(range(2, 11)) + [10, 10, 10] + [11])
+        dealer_cards.append(card)
+        dealer_score = sum(dealer_cards)
+        while dealer_score > 21 and 11 in dealer_cards:
+            dealer_cards[dealer_cards.index(11)] = 1
+            dealer_score = sum(dealer_cards)
+    game_state["game_over"] = True
+    await show_blackjack_final(call, bot, user_id, player_bust=False)
+    await call.answer()
+
+async def show_blackjack_final(call: CallbackQuery, bot: Bot, user_id: int, player_bust: bool):
+    game_state = burmalda_game.active_games.get(user_id)
+    player_cards = game_state["player_cards"]
+    dealer_cards = game_state["dealer_cards"]
+    player_score = sum(player_cards)
+    while player_score > 21 and 11 in player_cards:
+        player_cards[player_cards.index(11)] = 1
+        player_score = sum(player_cards)
+    dealer_score = sum(dealer_cards)
+    while dealer_score > 21 and 11 in dealer_cards:
+        dealer_cards[dealer_cards.index(11)] = 1
+        dealer_score = sum(dealer_cards)
+    player_cards_str = ", ".join(map(str, player_cards))
+    dealer_cards_str = ", ".join(map(str, dealer_cards))
+    # Определяем результат
+    if player_bust:
+        result = "❌ Перебор! Вы проиграли."
+        won = False
+    elif dealer_score > 21 or player_score > dealer_score:
+        result = "🎉 Победа!"
+        won = True
+    elif player_score == dealer_score:
+        result = "🤝 Ничья!"
+        won = False
+    else:
+        result = "❌ Проигрыш."
+        won = False
+    text = (
+        f"🃏 <b>Блэкджек</b>\n\n"
+        f"Ваши карты: {player_cards_str}\n"
+        f"Ваши очки: <b>{player_score}</b>\n\n"
+        f"Карты дилера: {dealer_cards_str}\n"
+        f"Очки дилера: <b>{dealer_score}</b>\n\n"
+        f"{result}"
+    )
+    # Удаляем старое сообщение
+    try:
+        last_msg_id = game_state["messages"][-1]
+        await bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=last_msg_id,
+            text=text,
+            reply_markup=None,
+            parse_mode="HTML"
+        )
+    except Exception:
+        new_message = await bot.send_message(
+            chat_id=call.message.chat.id,
+            text=text,
+            parse_mode="HTML"
+        )
+        game_state["messages"].append(new_message.message_id)
+    # Если победа — увеличиваем счётчик побед
+    if won:
+        game_state["wins"] += 1
+    # Показываем кнопку завершения игры
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
+    builder.adjust(1)
+    await bot.send_message(
+        chat_id=call.message.chat.id,
+        text="Вы можете завершить игру или начать новую.",
+        reply_markup=builder.as_markup()
+    )
