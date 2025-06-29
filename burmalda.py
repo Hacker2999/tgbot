@@ -326,7 +326,7 @@ class BurmaldaGame:
             won = len(set(reels)) == 1
             
             message = (
-                f"🎰 <b>Слоты</b>\n\n"
+                f"<b>Слоты</b>\n\n"
                 f"[{' | '.join(reels)}]\n\n"
                 f"{'🎉 Джекпот!' if won else '❌ Попробуйте еще раз'}"
             )
@@ -420,7 +420,7 @@ class BurmaldaGame:
         builder = InlineKeyboardBuilder()
         builder.button(text="🎲 Рулетка", callback_data=f"burmalda_game_roulette_{user_id}")
         builder.button(text="🎯 Кости", callback_data=f"burmalda_game_dice_{user_id}")
-        builder.button(text="🎰 Слоты", callback_data=f"burmalda_game_slot_{user_id}")
+        builder.button(text="Слоты", callback_data=f"burmalda_game_slot_{user_id}")
         builder.button(text="🃏 Блэкджек", callback_data=f"burmalda_game_blackjack_{user_id}")
         builder.button(text="🏪 Магазин", callback_data=f"burmalda_shop_{user_id}")
         builder.adjust(2, 2, 1)
