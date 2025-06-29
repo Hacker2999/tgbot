@@ -105,6 +105,91 @@ async def is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
 
 # --- Обработчики событий ---
 
+@router.message()
+async def handle_all_messages(message: Message, bot: Bot) -> None:
+    """
+    Обработчик всех сообщений для обновления статистики пользователей.
+    Обновляет last_visit и message_count.
+    """
+    try:
+        # Пропускаем сообщения от ботов и каналов
+        if message.from_user and message.from_user.is_bot:
+            return
+        if message.chat.type == "channel":
+            return
+            
+        user_id = message.from_user.id
+        
+        # Обновляем/создаем запись пользователя
+        (
+            User_listModel
+            .insert({
+                User_listModel.created_at: fn.now(),
+                User_listModel.user_id: user_id,
+                User_listModel.message_count: 1,
+                User_listModel.last_visit: fn.now(),
+            })
+            .on_conflict(
+                conflict_target=[User_listModel.user_id],
+                update={
+                    User_listModel.message_count: User_listModel.message_count + 1,
+                    User_listModel.last_visit: fn.now()
+                }
+            )
+        ).execute()
+        
+    except Exception as e:
+        logger.error(f"Ошибка при обновлении статистики пользователя {message.from_user.id}: {e}")
+
+@router.message()
+async def messages_counter(message: Message, bot: Bot) -> None:
+    """Обработчик всех сообщений для подсчета статистики и начисления опыта."""
+    try:
+        # Отсеиваем привязанный канал и сообщения бота
+        if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+            return
+        # Фильтруем команды
+        if message.text and message.text.startswith("/"):
+            try:
+                await message.delete()
+            except Exception as e:
+                logger.error(f"Не удалось удалить команду в чате {message.chat.id}: {e}")
+            return
+            
+        # Проверяем винстрик
+        is_new_day, streak = check_visit_streak(message.from_user.id)
+        if is_new_day and streak > 1:
+            username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
+            # Начисляем опыт за винстрик
+            streak_exp = 10 * streak
+            User_listModel.update({
+                User_listModel.level_exp: User_listModel.level_exp + streak_exp
+            }).where(User_listModel.user_id == message.from_user.id).execute()
+            await message.reply(
+                f"🎉 <b>{username}</b>, в чате {streak}-й день подряд!\nВы получаете <b>{streak_exp}</b> опыта за активность!",
+                parse_mode="HTML"
+            )
+
+        # Проверяем шанс получения бонусного опыта (1%)
+        if random.random() < 0.01:
+            bonus_exp = random.randint(10, 100)
+            User_listModel.update({
+                User_listModel.bonus_exp: User_listModel.bonus_exp + bonus_exp
+            }).where(User_listModel.user_id == message.from_user.id).execute()
+            username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
+            await message.reply(
+                f"🎲 <b>{username}</b> получает <b>{bonus_exp}</b> бонусного опыта за активность!",
+                parse_mode="HTML"
+            )
+
+        # Начисляем опыт за сообщение
+        User_listModel.update({
+            User_listModel.level_exp: User_listModel.level_exp + 1
+        }).where(User_listModel.user_id == message.from_user.id).execute()
+        
+    except Exception as e:
+        logger.error(f"Ошибка в messages_counter для user_id {message.from_user.id}: {e}")
+
 @router.my_chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
 async def handle_member_join(event: ChatMemberUpdated, bot: Bot) -> None:
     """Обработчик добавления бота в чат."""
@@ -1099,67 +1184,3 @@ async def admin_ban(message: Message, bot: Bot) -> None:
     except Exception as e:
         logger.error(f"Ошибка в admin_ban: {e}")
         await message.reply("Ошибка при бане пользователя.")
-
-# --- Системные обработчики ---
-
-@router.message()
-async def messages_counter(message: Message, bot: Bot) -> None:
-    """Обработчик всех сообщений для подсчета статистики и начисления опыта."""
-    try:
-        # Отсеиваем привязанный канал и сообщения бота
-        if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
-            return
-        # Фильтруем команды
-        if message.text and message.text.startswith("/"):
-            try:
-                await message.delete()
-            except Exception as e:
-                logger.error(f"Не удалось удалить команду в чате {message.chat.id}: {e}")
-            return
-            
-        # Проверяем винстрик
-        is_new_day, streak = check_visit_streak(message.from_user.id)
-        if is_new_day and streak > 1:
-            username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
-            # Начисляем опыт за винстрик
-            streak_exp = 10 * streak
-            User_listModel.update({
-                User_listModel.level_exp: User_listModel.level_exp + streak_exp
-            }).where(User_listModel.user_id == message.from_user.id).execute()
-            await message.reply(
-                f"🎉 <b>{username}</b>, в чате {streak}-й день подряд!\nВы получаете <b>{streak_exp}</b> опыта за активность!",
-                parse_mode="HTML"
-            )
-
-        # Проверяем шанс получения бонусного опыта (1%)
-        if random.random() < 0.01:
-            bonus_exp = random.randint(10, 100)
-            User_listModel.update({
-                User_listModel.bonus_exp: User_listModel.bonus_exp + bonus_exp
-            }).where(User_listModel.user_id == message.from_user.id).execute()
-            username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
-            await message.reply(
-                f"🎲 <b>{username}</b> получает <b>{bonus_exp}</b> бонусного опыта за активность!",
-                parse_mode="HTML"
-            )
-
-        # Обновляем статистику
-        q = (
-            User_listModel
-            .insert({
-                User_listModel.created_at: fn.now(),
-                User_listModel.user_id: message.from_user.id,
-                User_listModel.last_visit: fn.now(),
-            })
-            .on_conflict(
-                conflict_target=[User_listModel.user_id],
-                update={
-                    User_listModel.message_count: User_listModel.message_count + 1,
-                    User_listModel.level_exp: User_listModel.level_exp + 1,
-                    User_listModel.last_visit: fn.now()
-                }
-            )
-        )
-        q.execute()
-    except Exception as e:
-        logger.error(f"Ошибка в messages_counter для user_id {message.from_user.id}: {e}")

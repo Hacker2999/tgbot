@@ -296,35 +296,67 @@ async def kick_for_unactive(bot, chat_id: int) -> None:
     """
     try:
         moscow_tz = pytz.timezone('Europe/Moscow')
-        today = datetime.now(moscow_tz).date()
+        now = datetime.now(moscow_tz)
+        thirty_days_ago = now - timedelta(days=30)
 
+        # Получаем всех пользователей с их последним посещением
         query = (
             User_listModel
             .select(User_listModel.user_id, User_listModel.last_visit)
+            .where(User_listModel.last_visit.is_null(False))  # Только пользователи с записью о посещении
         )
         results = list(query)
 
         if not results:
+            logger.info("Нет пользователей для проверки на неактивность")
             return
 
-        # кикаем пользователей
-        for idx, result in enumerate(results):
-            if idx in results:
-                user = User_listModel.get_or_none(User_listModel.user_id == result.user_id)
-                if await is_admin(bot, bot.chat.id, user.user_id):
+        kicked_count = 0
+        for result in results:
+            try:
+                # Проверяем, является ли пользователь администратором
+                if await is_admin(bot, chat_id, result.user_id):
                     continue
-                else:
+                
+                # Проверяем, прошло ли более 30 дней с последнего посещения
+                last_visit = result.last_visit
+                if last_visit.tzinfo is None:
+                    last_visit = last_visit.replace(tzinfo=timezone.utc)
+                last_visit_msk = last_visit.astimezone(moscow_tz)
+                
+                if last_visit_msk < thirty_days_ago:
+                    # Кикаем пользователя
                     try:
-                        if timedelta(result.last_visit - datetime.now()) > timedelta(days=30):
-                            member = await bot.get_chat_member(chat_id, result.user_id)
-                            await bot.ban_chat_member(chat_id, member.user.id)
-                            await bot.unban_chat_member(chat_id, member.user.id)
-                            await asyncio.sleep(5)
+                        member = await bot.get_chat_member(chat_id, result.user_id)
+                        username = member.user.username if member.user.username else member.user.first_name
+                        
+                        # Баним и сразу разбаниваем (это кикает пользователя)
+                        await bot.ban_chat_member(chat_id, result.user_id)
+                        await bot.unban_chat_member(chat_id, result.user_id)
+                        
+                        kicked_count += 1
+                        logger.info(f"Пользователь {username} (ID: {result.user_id}) кикнут за неактивность более 30 дней")
+                        
+                        # Небольшая пауза между киками
+                        await asyncio.sleep(1)
+                        
                     except Exception as e:
-                        logger.error(f"Ошибка при отправке сообщения о награде для user_id {result.user_id}: {e}")
+                        logger.error(f"Ошибка при кике пользователя {result.user_id}: {e}")
+                        continue
+                        
+            except Exception as e:
+                logger.error(f"Ошибка при обработке пользователя {result.user_id}: {e}")
+                continue
+
+        if kicked_count > 0:
+            await bot.send_message(
+                chat_id=chat_id,
+                text=f"🔨 Автоматически кикнуто {kicked_count} неактивных пользователей (неактивность более 30 дней)"
+            )
+            logger.info(f"Автоматический кик завершен. Кикнуто пользователей: {kicked_count}")
 
     except Exception as e:
-        logger.error(f"Ошибка при начислении опыта за таблицу размеров: {e}")
+        logger.error(f"Ошибка при проверке неактивных пользователей: {e}")
 
 
 

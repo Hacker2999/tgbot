@@ -11,7 +11,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from config import API_TOKEN, CHANNEL_CHAT_ID
 from handlers import router
 from middleware import AntiSpamMiddleware
-from model import Chat_listModel
+from model import Chat_listModel, db
 from ignore_old_messages import IgnoreOldMessagesMiddleware
 from utils import award_size_top_exp, kick_for_unactive
 
@@ -70,7 +70,7 @@ async def auto_task(bot: Bot, chat_id: int):
             
             # Начисляем награды
             await award_size_top_exp(bot, chat_id)
-            #await kick_for_unactive(bot, chat_id)
+            await kick_for_unactive(bot, chat_id)
             
         except Exception as e:
             logger.error(f"Ошибка в планировщике наград: {e}")
@@ -81,6 +81,15 @@ async def main() -> None:
     token = get_api_token()
     if not token:
         return
+        
+    # Инициализируем подключение к базе данных
+    try:
+        db.connect()
+        logger.info("Подключение к базе данных установлено")
+    except Exception as e:
+        logger.error(f"Ошибка подключения к базе данных: {e}")
+        return
+        
     bot = Bot(token=token)
     dp = Dispatcher()
     dp.include_router(router)
@@ -114,6 +123,12 @@ async def main() -> None:
     finally:
         logger.info("Бот завершил работу.")
         await send_channel_message(bot, "⚠️ Бот завершил работу. До скорой встречи!")
+        # Закрываем подключение к базе данных
+        try:
+            db.close()
+            logger.info("Подключение к базе данных закрыто")
+        except Exception as e:
+            logger.error(f"Ошибка при закрытии подключения к базе данных: {e}")
 
 if __name__ == "__main__":
     asyncio.run(main())
