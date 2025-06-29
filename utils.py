@@ -271,7 +271,7 @@ async def award_size_top_exp(bot, chat_id: int) -> None:
                     place = idx + 1
                     
                     # Начисляем опыт с проверкой повышения уровня
-                    await award_exp_and_check_level_up(result.user_id, rewards[idx], 'bonus', username, None, bot)
+                    await award_exp_and_check_level_up(result.user_id, 0, rewards[idx], username, None, bot)
                     
                     await bot.send_message(
                         chat_id=chat_id,
@@ -389,14 +389,14 @@ async def is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
         logger.error(f"Ошибка при проверке прав администратора для user_id {user_id} в чате {chat_id}: {e}")
         return False
 
-async def award_exp_and_check_level_up(user_id: int, exp_amount: int, exp_type: str, username: str, message=None, bot=None) -> None:
+async def award_exp_and_check_level_up(user_id: int, level_exp_amount: int, bonus_exp_amount: int, username: str, message=None, bot=None) -> None:
     """
     Начисляет опыт пользователю, проверяет повышение уровня и отправляет уведомления.
     
     Args:
         user_id (int): ID пользователя
-        exp_amount (int): Количество опыта для начисления
-        exp_type (str): Тип опыта ('level', 'bonus')
+        level_exp_amount (int): Количество level опыта для начисления
+        bonus_exp_amount (int): Количество bonus опыта для начисления
         username (str): Имя пользователя
         message: Объект сообщения для ответа (может быть None)
         bot: Экземпляр бота (может быть None)
@@ -421,7 +421,8 @@ async def award_exp_and_check_level_up(user_id: int, exp_amount: int, exp_type: 
         current_level = calculate_level(current_exp)
         
         # Рассчитываем новый уровень после начисления опыта
-        new_exp = current_exp + exp_amount
+        total_exp_to_award = level_exp_amount + bonus_exp_amount
+        new_exp = current_exp + total_exp_to_award
         new_level = calculate_level(new_exp)
         
         # Если уровень повысится и есть объект сообщения
@@ -437,16 +438,11 @@ async def award_exp_and_check_level_up(user_id: int, exp_amount: int, exp_type: 
             await message.reply(level_up_message, parse_mode="HTML")
         
         # Начисляем опыт и обновляем уровень
-        if exp_type == 'level':
-            User_listModel.update({
-                User_listModel.level_exp: User_listModel.level_exp + exp_amount,
-                User_listModel.rank: new_level
-            }).where(User_listModel.user_id == user_id).execute()
-        elif exp_type == 'bonus':
-            User_listModel.update({
-                User_listModel.bonus_exp: User_listModel.bonus_exp + exp_amount,
-                User_listModel.rank: new_level
-            }).where(User_listModel.user_id == user_id).execute()
+        User_listModel.update({
+            User_listModel.level_exp: User_listModel.level_exp + level_exp_amount,
+            User_listModel.bonus_exp: User_listModel.bonus_exp + bonus_exp_amount,
+            User_listModel.rank: new_level
+        }).where(User_listModel.user_id == user_id).execute()
             
     except Exception as e:
         logger.error(f"Ошибка при начислении опыта для user_id {user_id}: {e}")

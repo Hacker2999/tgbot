@@ -723,7 +723,7 @@ async def roulette(message: Message, bot: Bot) -> None:
                 }).execute()
             else:
                 username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
-                await award_exp_and_check_level_up(message.from_user.id, bonus_exp, 'bonus', username, message, bot)
+                await award_exp_and_check_level_up(message.from_user.id, 0, bonus_exp, username, message, bot)
             await message.reply(f"Победа за вами! 🎉\nВы получаете <b>{bonus_exp}</b> бонусного опыта за игру в рулетку.", parse_mode="HTML")
         else:
             # Мутим пользователя
@@ -1110,13 +1110,18 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
                 logger.error(f"Не удалось удалить команду в чате {message.chat.id}: {e}")
             return
             
+        username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
+        total_exp_to_award = 0
+        level_exp_to_award = 0
+        bonus_exp_to_award = 0
+        
         # Проверяем винстрик
         is_new_day, streak = check_visit_streak(user_id)
         if is_new_day and streak > 1:
-            username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
             # Начисляем опыт за винстрик
             streak_exp = 10 * streak
-            await award_exp_and_check_level_up(user_id, streak_exp, 'level', username, message, bot)
+            level_exp_to_award += streak_exp
+            total_exp_to_award += streak_exp
             
             await message.reply(
                 f"🎉 <b>{username}</b>, в чате {streak}-й день подряд!\nВы получаете <b>{streak_exp}</b> опыта за активность!",
@@ -1126,8 +1131,8 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
         # Проверяем шанс получения бонусного опыта (1%)
         if random.random() < 0.01:
             bonus_exp = random.randint(10, 100)
-            username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
-            await award_exp_and_check_level_up(user_id, bonus_exp, 'bonus', username, message, bot)
+            bonus_exp_to_award += bonus_exp
+            total_exp_to_award += bonus_exp
             
             await message.reply(
                 f"🎲 <b>{username}</b> получает <b>{bonus_exp}</b> бонусного опыта за активность!",
@@ -1135,8 +1140,12 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
             )
 
         # Начисляем опыт за сообщение
-        username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
-        await award_exp_and_check_level_up(user_id, 1, 'level', username, message, bot)
+        level_exp_to_award += 1
+        total_exp_to_award += 1
         
+        # Начисляем весь накопленный опыт и проверяем повышение уровня
+        if total_exp_to_award > 0:
+            await award_exp_and_check_level_up(user_id, level_exp_to_award, bonus_exp_to_award, username, message, bot)
+
     except Exception as e:
         logger.error(f"Ошибка в handle_all_messages для user_id {message.from_user.id}: {e}")
