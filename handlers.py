@@ -1377,10 +1377,19 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
         if not game_state:
             await call.answer("❌ Игра не найдена", show_alert=True)
             return
-            
+        
         # Увеличиваем счетчик попыток
         game_state["attempts"] += 1
         
+        # Создаем кнопки для продолжения (builder нужен для всех игр)
+        from aiogram.utils.keyboard import InlineKeyboardBuilder
+        builder = InlineKeyboardBuilder()
+        if game_state["attempts"] < 3 and game_type != "blackjack":
+            builder.button(text="🎲 Следующая попытка", callback_data=f"burmalda_game_{game_type}_{user_id}")
+        builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
+        builder.adjust(1)
+        
+        # Далее ветвление по типу игры...
         # Удаляем предыдущие сообщения если есть (стикер и результат)
         if len(game_state["messages"]) >= 2:
             try:
@@ -1440,13 +1449,6 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
         if result.won:
             game_state["wins"] += 1
             
-        # Создаем кнопки для продолжения
-        builder = InlineKeyboardBuilder()
-        if game_state["attempts"] < 3 and game_type != "blackjack":
-            builder.button(text="🎲 Следующая попытка", callback_data=f"burmalda_game_{game_type}_{user_id}")
-        builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
-        builder.adjust(1)
-        
         # Отправляем результат
         result_text = (
             f"{result.message}\n\n"
