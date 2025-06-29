@@ -1389,87 +1389,60 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
         builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
         builder.adjust(1)
         
-        # Далее ветвление по типу игры...
         # Удаляем предыдущие сообщения если есть (стикер и результат)
         if len(game_state["messages"]) >= 2:
             try:
-                # Удаляем последние 2 сообщения (стикер и результат)
                 await bot.delete_message(call.message.chat.id, game_state["messages"][-2])
                 await bot.delete_message(call.message.chat.id, game_state["messages"][-1])
-                # Убираем их из списка
                 game_state["messages"] = game_state["messages"][:-2]
             except Exception:
                 pass
-                
-        # Отправляем интерактивный стикер в зависимости от игры
-        sticker_emoji = {
-            "roulette": "🎲",
-            "dice": "🎯", 
-            "slot": "🎰",
-            "blackjack": "🃏"
-        }.get(game_type, "🎮")
         
-        # Отправляем стикер
-        sticker_msg = await bot.send_dice(
-            chat_id=call.message.chat.id,
-            emoji=sticker_emoji
-        )
-        
-        # Играем в выбранную игру с использованием значения из стикера
-        if game_type == "roulette":
-            result = await burmalda_game.play_roulette_game(user_id, sticker_msg.dice.value)
-        elif game_type == "dice":
-            result = await burmalda_game.play_dice_game(user_id, sticker_msg.dice.value)
+        # --- Логика по типу игры ---
+        if game_type in ("roulette", "dice"):
+            # Только для этих игр отправляем стикер и используем его значение
+            sticker_emoji = {
+                "roulette": "🎲",
+                "dice": "🎯"
+            }[game_type]
+            sticker_msg = await bot.send_dice(
+                chat_id=call.message.chat.id,
+                emoji=sticker_emoji
+            )
+            if game_type == "roulette":
+                result = await burmalda_game.play_roulette_game(user_id, sticker_msg.dice.value)
+            else:
+                result = await burmalda_game.play_dice_game(user_id, sticker_msg.dice.value)
+            game_state["messages"].append(sticker_msg.message_id)
         elif game_type == "slot":
-            # Для слотов используем только свою логику, не отправляем стикер
+            # Для слотов только своё сообщение
             import random
             slot_values = [random.randint(1, 6) for _ in range(3)]
             result = await burmalda_game.play_slot_game(user_id, slot_values)
-            # Не отправляем стикер, только текстовое сообщение
-            new_message = await bot.send_message(
-                chat_id=call.message.chat.id,
-                text=(
-                    f"{result.message}\n\n"
-                    f"📊 Попытка: {game_state['attempts']}/3\n"
-                    f"🎯 Победы: {game_state['wins']}/3"
-                ),
-                reply_markup=builder.as_markup(),
-                parse_mode="HTML"
-            )
-            game_state["messages"].append(new_message.message_id)
-            await call.answer()
-            return
         elif game_type == "blackjack":
+            # Для блэкджека только своё сообщение
             result = await burmalda_game.play_blackjack_game(user_id)
         else:
             await call.answer("❌ Неизвестная игра", show_alert=True)
             return
-            
+        
         # Увеличиваем счетчик побед
         if result.won:
             game_state["wins"] += 1
-            
-        # Отправляем результат
-        result_text = (
-            f"{result.message}\n\n"
-            f"📊 Попытка: {game_state['attempts']}/3\n"
-            f"🎯 Победы: {game_state['wins']}/3"
-        )
         
         # Отправляем новое сообщение с результатом
         new_message = await bot.send_message(
             chat_id=call.message.chat.id,
-            text=result_text,
+            text=(
+                f"{result.message}\n\n"
+                f"📊 Попытка: {game_state['attempts']}/3\n"
+                f"🎯 Победы: {game_state['wins']}/3"
+            ),
             reply_markup=builder.as_markup(),
             parse_mode="HTML"
         )
-        
-        # Сохраняем ID сообщений
-        game_state["messages"].append(sticker_msg.message_id)
         game_state["messages"].append(new_message.message_id)
-        
         await call.answer()
-        
     except Exception as e:
         logger.error(f"Ошибка в start_burmalda_game: {e}")
         await call.answer("❌ Ошибка в игре", show_alert=True)
