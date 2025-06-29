@@ -1118,6 +1118,10 @@ async def burmalda_command(message: Message, bot: Bot) -> None:
         logger.error(f"Ошибка в команде burmalda для user_id {message.from_user.id}: {e}")
         await message.reply("❌ Произошла ошибка при открытии игровой системы.")
 
+@router.callback_query(F.data.startswith("burmalda_finish_"))
+async def burmalda_finish_callback(call: CallbackQuery, bot: Bot) -> None:
+    await finish_burmalda_game(call, bot)
+
 @router.callback_query(F.data.startswith("burmalda_"))
 async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
     # Если это завершение игры, не обрабатываем здесь, а даём сработать finish_burmalda_game
@@ -1299,10 +1303,6 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
     except Exception as e:
         logger.error(f"Ошибка в burmalda_callback: {e}")
         await call.answer("❌ Произошла ошибка", show_alert=True)
-
-@router.callback_query(F.data.startswith("burmalda_finish_"))
-async def burmalda_finish_callback(call: CallbackQuery, bot: Bot) -> None:
-    await finish_burmalda_game(call, bot)
 
 async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_type: str) -> None:
     """Начинает игру в Burmalda"""
