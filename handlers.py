@@ -1412,14 +1412,24 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
         elif game_type == "dice":
             result = await burmalda_game.play_dice_game(user_id, sticker_msg.dice.value)
         elif game_type == "slot":
-            # Для слотов генерируем разные значения для каждого барабана на основе стикера
-            base_value = sticker_msg.dice.value
-            # Используем base_value как seed для генерации 3 разных значений
+            # Для слотов используем только свою логику, не отправляем стикер
             import random
-            random.seed(base_value)
             slot_values = [random.randint(1, 6) for _ in range(3)]
-            random.seed()  # Сбрасываем seed
             result = await burmalda_game.play_slot_game(user_id, slot_values)
+            # Не отправляем стикер, только текстовое сообщение
+            new_message = await bot.send_message(
+                chat_id=call.message.chat.id,
+                text=(
+                    f"{result.message}\n\n"
+                    f"📊 Попытка: {game_state['attempts']}/3\n"
+                    f"🎯 Победы: {game_state['wins']}/3"
+                ),
+                reply_markup=builder.as_markup(),
+                parse_mode="HTML"
+            )
+            game_state["messages"].append(new_message.message_id)
+            await call.answer()
+            return
         elif game_type == "blackjack":
             result = await burmalda_game.play_blackjack_game(user_id)
         else:
