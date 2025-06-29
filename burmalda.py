@@ -72,33 +72,50 @@ class BurmaldaGame:
         try:
             today = date.today()
             
-            # Получаем или создаем пользователя
-            user = User_listModel.get_or_none(User_listModel.user_id == user_id)
-            if not user:
-                User_listModel.insert({
-                    User_listModel.created_at: fn.now(),
-                    User_listModel.user_id: user_id,
-                    User_listModel.credits: DAILY_CREDITS,
-                    User_listModel.points: 0,
-                    User_listModel.last_credits_date: today,
-                    User_listModel.rank: 1
-                }).execute()
+            # Получаем пользователя
+            q = (
+                User_listModel
+                .select()
+                .where(User_listModel.user_id == user_id)
+                .first()
+            )
+            
+            if not q:
+                # Создаем нового пользователя
+                (
+                    User_listModel
+                    .insert({
+                        User_listModel.created_at: fn.now(),
+                        User_listModel.user_id: user_id,
+                        User_listModel.credits: DAILY_CREDITS,
+                        User_listModel.points: 0,
+                        User_listModel.last_credits_date: today,
+                        User_listModel.rank: 1
+                    })
+                ).execute()
                 return DAILY_CREDITS
             
             # Проверяем, выдавались ли кредиты сегодня
-            if user.last_credits_date != today:
+            if q.last_credits_date != today:
                 # Выдаем кредиты
-                User_listModel.update({
-                    User_listModel.credits: User_listModel.credits + DAILY_CREDITS,
-                    User_listModel.last_credits_date: today
-                }).where(User_listModel.user_id == user_id).execute()
+                (
+                    User_listModel
+                    .update({
+                        User_listModel.credits: User_listModel.credits + DAILY_CREDITS,
+                        User_listModel.last_credits_date: today
+                    })
+                    .where(User_listModel.user_id == user_id)
+                ).execute()
                 
                 # Записываем в историю
-                CreditsHistoryModel.insert({
-                    CreditsHistoryModel.user_id: user_id,
-                    CreditsHistoryModel.credits_amount: DAILY_CREDITS,
-                    CreditsHistoryModel.issued_date: today
-                }).execute()
+                (
+                    CreditsHistoryModel
+                    .insert({
+                        CreditsHistoryModel.user_id: user_id,
+                        CreditsHistoryModel.credits_amount: DAILY_CREDITS,
+                        CreditsHistoryModel.issued_date: today
+                    })
+                ).execute()
                 
                 return DAILY_CREDITS
             else:
@@ -111,8 +128,13 @@ class BurmaldaGame:
     def get_user_credits(self, user_id: int) -> int:
         """Получает количество кредитов пользователя"""
         try:
-            user = User_listModel.get_or_none(User_listModel.user_id == user_id)
-            return user.credits if user else 0
+            q = (
+                User_listModel
+                .select(User_listModel.credits)
+                .where(User_listModel.user_id == user_id)
+                .first()
+            )
+            return q.credits if q else 0
         except Exception as e:
             logger.error(f"Ошибка при получении кредитов для user_id {user_id}: {e}")
             return 0
@@ -120,8 +142,13 @@ class BurmaldaGame:
     def get_user_points(self, user_id: int) -> int:
         """Получает количество очков пользователя"""
         try:
-            user = User_listModel.get_or_none(User_listModel.user_id == user_id)
-            return user.points if user else 0
+            q = (
+                User_listModel
+                .select(User_listModel.points)
+                .where(User_listModel.user_id == user_id)
+                .first()
+            )
+            return q.points if q else 0
         except Exception as e:
             logger.error(f"Ошибка при получении очков для user_id {user_id}: {e}")
             return 0
@@ -129,13 +156,22 @@ class BurmaldaGame:
     def spend_credits(self, user_id: int, amount: int) -> bool:
         """Тратит кредиты пользователя. Возвращает True если успешно"""
         try:
-            user = User_listModel.get_or_none(User_listModel.user_id == user_id)
-            if not user or user.credits < amount:
+            q = (
+                User_listModel
+                .select(User_listModel.credits)
+                .where(User_listModel.user_id == user_id)
+                .first()
+            )
+            if not q or q.credits < amount:
                 return False
             
-            User_listModel.update({
-                User_listModel.credits: User_listModel.credits - amount
-            }).where(User_listModel.user_id == user_id).execute()
+            (
+                User_listModel
+                .update({
+                    User_listModel.credits: User_listModel.credits - amount
+                })
+                .where(User_listModel.user_id == user_id)
+            ).execute()
             return True
         except Exception as e:
             logger.error(f"Ошибка при трате кредитов для user_id {user_id}: {e}")
@@ -144,13 +180,22 @@ class BurmaldaGame:
     def spend_points(self, user_id: int, amount: int) -> bool:
         """Тратит очки пользователя. Возвращает True если успешно"""
         try:
-            user = User_listModel.get_or_none(User_listModel.user_id == user_id)
-            if not user or user.points < amount:
+            q = (
+                User_listModel
+                .select(User_listModel.points)
+                .where(User_listModel.user_id == user_id)
+                .first()
+            )
+            if not q or q.points < amount:
                 return False
             
-            User_listModel.update({
-                User_listModel.points: User_listModel.points - amount
-            }).where(User_listModel.user_id == user_id).execute()
+            (
+                User_listModel
+                .update({
+                    User_listModel.points: User_listModel.points - amount
+                })
+                .where(User_listModel.user_id == user_id)
+            ).execute()
             return True
         except Exception as e:
             logger.error(f"Ошибка при трате очков для user_id {user_id}: {e}")
@@ -159,9 +204,13 @@ class BurmaldaGame:
     def add_points(self, user_id: int, amount: int) -> bool:
         """Добавляет очки пользователю"""
         try:
-            User_listModel.update({
-                User_listModel.points: User_listModel.points + amount
-            }).where(User_listModel.user_id == user_id).execute()
+            (
+                User_listModel
+                .update({
+                    User_listModel.points: User_listModel.points + amount
+                })
+                .where(User_listModel.user_id == user_id)
+            ).execute()
             return True
         except Exception as e:
             logger.error(f"Ошибка при добавлении очков для user_id {user_id}: {e}")
@@ -170,9 +219,13 @@ class BurmaldaGame:
     def add_bonus_exp(self, user_id: int, amount: int) -> bool:
         """Добавляет бонусный опыт пользователю"""
         try:
-            User_listModel.update({
-                User_listModel.bonus_exp: User_listModel.bonus_exp + amount
-            }).where(User_listModel.user_id == user_id).execute()
+            (
+                User_listModel
+                .update({
+                    User_listModel.bonus_exp: User_listModel.bonus_exp + amount
+                })
+                .where(User_listModel.user_id == user_id)
+            ).execute()
             return True
         except Exception as e:
             logger.error(f"Ошибка при добавлении бонусного опыта для user_id {user_id}: {e}")
@@ -367,9 +420,16 @@ class BurmaldaGame:
     def create_shop_menu(self, user_id: int) -> Tuple[str, InlineKeyboardMarkup]:
         """Создает меню магазина"""
         points = self.get_user_points(user_id)
-        user = User_listModel.get_or_none(User_listModel.user_id == user_id)
-        warn_count = user.warn_count if user else 0
-        level = user.rank if user else 1
+        
+        q = (
+            User_listModel
+            .select(User_listModel.warn_count, User_listModel.rank)
+            .where(User_listModel.user_id == user_id)
+            .first()
+        )
+        
+        warn_count = q.warn_count if q else 0
+        level = q.rank if q else 1
         
         commission = self.get_commission_rate(level)
         exchange_rate = int(1 / commission)  # Сколько очков за 1 опыт

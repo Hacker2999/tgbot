@@ -1209,20 +1209,28 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             return
             
         action = data[1]
-        user_id = int(data[2])
         
-        # Проверяем, что callback отправил тот же пользователь
-        if call.from_user.id != user_id:
-            await call.answer("❌ Это не ваше меню!", show_alert=True)
-            return
-            
         if action == "main":
             # Главное меню
+            user_id = int(data[2])
+            
+            # Проверяем, что callback отправил тот же пользователь
+            if call.from_user.id != user_id:
+                await call.answer("❌ Это не ваше меню!", show_alert=True)
+                return
+                
             text, markup = burmalda_game.create_main_menu(user_id)
             await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
             
         elif action == "shop":
             # Магазин
+            user_id = int(data[2])
+            
+            # Проверяем, что callback отправил тот же пользователь
+            if call.from_user.id != user_id:
+                await call.answer("❌ Это не ваше меню!", show_alert=True)
+                return
+                
             text, markup = burmalda_game.create_shop_menu(user_id)
             await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
             
@@ -1232,17 +1240,23 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
                 await call.answer("❌ Неверный формат данных игры")
                 return
                 
-            game_type = data[3]
+            game_type = data[2]
+            user_id = int(data[3])
+            
+            # Проверяем, что callback отправил тот же пользователь
+            if call.from_user.id != user_id:
+                await call.answer("❌ Это не ваша игра!", show_alert=True)
+                return
             
             # Проверяем кредиты
             credits = burmalda_game.get_user_credits(user_id)
             if credits < GAME_COST:
-                await call.answer(f"❌ Недостаточно кредитов! Нужно: {GAME_COST}, у вас: {credits}", show_alert=True)
+                await call.answer(f"❌ Недостаточно отвальчиков! Нужно: {GAME_COST}, у вас: {credits}", show_alert=True)
                 return
                 
             # Тратим кредиты
             if not burmalda_game.spend_credits(user_id, GAME_COST):
-                await call.answer("❌ Ошибка при списании кредитов", show_alert=True)
+                await call.answer("❌ Ошибка при списании отвальчиков", show_alert=True)
                 return
                 
             # Инициализируем игру
@@ -1262,8 +1276,21 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
                 await call.answer("❌ Неверный формат данных")
                 return
                 
-            user = User_listModel.get_or_none(User_listModel.user_id == user_id)
-            if not user or user.warn_count == 0:
+            user_id = int(data[2])
+            
+            # Проверяем, что callback отправил тот же пользователь
+            if call.from_user.id != user_id:
+                await call.answer("❌ Это не ваше меню!", show_alert=True)
+                return
+                
+            q = (
+                User_listModel
+                .select(User_listModel.warn_count)
+                .where(User_listModel.user_id == user_id)
+                .first()
+            )
+            
+            if not q or q.warn_count == 0:
                 await call.answer("❌ У вас нет предупреждений для снятия", show_alert=True)
                 return
                 
@@ -1273,9 +1300,13 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
                 return
                 
             # Снимаем предупреждение и тратим очки
-            User_listModel.update({
-                User_listModel.warn_count: User_listModel.warn_count - 1
-            }).where(User_listModel.user_id == user_id).execute()
+            (
+                User_listModel
+                .update({
+                    User_listModel.warn_count: User_listModel.warn_count - 1
+                })
+                .where(User_listModel.user_id == user_id)
+            ).execute()
             
             burmalda_game.spend_points(user_id, WARN_REMOVAL_COST)
             
@@ -1291,8 +1322,21 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
                 await call.answer("❌ Неверный формат данных")
                 return
                 
-            user = User_listModel.get_or_none(User_listModel.user_id == user_id)
-            if not user:
+            user_id = int(data[2])
+            
+            # Проверяем, что callback отправил тот же пользователь
+            if call.from_user.id != user_id:
+                await call.answer("❌ Это не ваше меню!", show_alert=True)
+                return
+                
+            q = (
+                User_listModel
+                .select(User_listModel.rank)
+                .where(User_listModel.user_id == user_id)
+                .first()
+            )
+            
+            if not q:
                 await call.answer("❌ Пользователь не найден", show_alert=True)
                 return
                 
@@ -1302,7 +1346,7 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
                 return
                 
             # Рассчитываем опыт с учетом комиссии
-            commission = burmalda_game.get_commission_rate(user.rank)
+            commission = burmalda_game.get_commission_rate(q.rank)
             exp_gained = int(100 * (1 - commission))
             
             # Тратим очки и начисляем опыт

@@ -93,7 +93,7 @@ class CreditsHistoryModel(BaseModel):
     user_id = BigIntegerField(null=False)
     credits_amount = BigIntegerField(null=False)  # Количество выданных кредитов
     issued_date = DateField(null=False)  # Дата выдачи
-    created_at = TimestampField(constraints=[SQL('DEFAULT now()')])
+    created_at = TimestampField(null=True)  # Убираем DEFAULT now()
 
     class Meta:
         table_name = 'credits_history'
