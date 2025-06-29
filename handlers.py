@@ -1359,9 +1359,27 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
         if result.won:
             game_state["wins"] += 1
         
+        # --- Вычисляем выигрыш за текущую попытку ---
+        attempt_num = game_state["attempts"]
+        wins_now = game_state["wins"]
+        # Определяем, была ли эта попытка победной
+        won_this_attempt = result.won
+        # Считаем, сколько побед было до этой попытки
+        prev_wins = wins_now - 1 if won_this_attempt else wins_now
+        # Выигрыш за попытку начисляется только если победа
+        if won_this_attempt:
+            # Определяем, какой по счету это выигрыш (1, 2 или 3)
+            win_index = prev_wins + 1
+            points = ATTEMPT_REWARDS.get(win_index, 0)
+            exp = VICTORY_BONUS_EXP.get(win_index, 0)
+            win_text = f"🏅 Выигрыш за попытку: <b>{points}</b> очков, <b>{exp}</b> опыта"
+        else:
+            win_text = "❌ Нет выигрыша за попытку"
+        
         # Отправляем результат
         result_text = (
             f"{result.message}\n\n"
+            f"{win_text}\n"
             f"📊 Попытка: {game_state['attempts']}/3\n"
             f"🎯 Победы: {game_state['wins']}/3"
         )
@@ -1435,17 +1453,13 @@ async def finish_burmalda_game(call: CallbackQuery, bot: Bot) -> None:
             await call.message.delete()
         except Exception:
             pass
-            
-        # Отправляем итоговое сообщение
-        builder = InlineKeyboardBuilder()
-        builder.button(text="🎮 Играть снова", callback_data=f"burmalda_main_{user_id}")
-        builder.button(text="🏪 Магазин", callback_data=f"burmalda_shop_{user_id}")
-        builder.adjust(1)
         
+        # Отправляем новое главное меню Burmalda
+        text, markup = burmalda_game.create_main_menu(user_id)
         await bot.send_message(
             chat_id=call.message.chat.id,
-            text=result_text,
-            reply_markup=builder.as_markup(),
+            text=text,
+            reply_markup=markup,
             parse_mode="HTML"
         )
         
