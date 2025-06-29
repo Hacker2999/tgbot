@@ -319,8 +319,8 @@ class BurmaldaGame:
                 # Генерируем случайные значения
                 reels = [random.choice(symbols) for _ in range(3)]
             else:
-                # Используем переданные значения (индексы символов)
-                reels = [symbols[i % len(symbols)] for i in slot_values]
+                # Используем переданные значения напрямую (1-6)
+                reels = [symbols[i-1] for i in slot_values]  # i-1 потому что индексы с 0, а значения с 1
             
             # Победа если все символы одинаковые
             won = len(set(reels)) == 1
