@@ -15,7 +15,7 @@ from peewee import fn, DatabaseError
 
 from baneks_api import fetch_random_joke
 from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel
-from utils import quota_check, calculate_level, calculate_exp_for_level, calculate_messages_for_level, get_user_rank, check_visit_streak
+from utils import quota_check, calculate_level, calculate_exp_for_level, calculate_messages_for_level, get_user_rank, check_visit_streak, is_admin
 from config import RULES, API_TOKEN, SPAM_LIMIT, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, KILL_CHAT_PASSWORD
 
 router = Router()
@@ -26,10 +26,6 @@ CAPTCHA_TIMEOUT = 120  # секунд
 CAPTCHA_ANSWERS = ["Я не бот", "Я бот", "12345"]
 MAX_MUTE_MINUTES = 1440  # 24 часа
 MIN_MUTE_MINUTES = 1
-
-# Кэш для проверки админов
-ADMIN_CACHE: Dict[Tuple[int, int], bool] = {}
-ADMIN_CACHE_TIMEOUT = 300  # 5 минут
 
 # --- Вспомогательные функции ---
 
@@ -69,39 +65,6 @@ def parse_time_arg(arg: str) -> Optional[timedelta]:
     except Exception as e:
         logger.error(f"Ошибка при парсинге временного интервала '{arg}': {e}")
         return None
-
-async def is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
-    """
-    Проверяет, является ли пользователь администратором чата.
-    Использует кэширование для оптимизации.
-    
-    Args:
-        bot (Bot): Экземпляр бота
-        chat_id (int): ID чата
-        user_id (int): ID пользователя
-        
-    Returns:
-        bool: True если пользователь админ, False если нет
-    """
-    cache_key = (chat_id, user_id)
-    current_time = datetime.now().timestamp()
-    
-    # Проверяем кэш
-    if cache_key in ADMIN_CACHE:
-        cached_result, timestamp = ADMIN_CACHE[cache_key]
-        if current_time - timestamp < ADMIN_CACHE_TIMEOUT:
-            return cached_result
-    
-    try:
-        member = await bot.get_chat_member(chat_id, user_id)
-        is_admin = member.status in ("administrator", "creator")
-        
-        # Сохраняем в кэш
-        ADMIN_CACHE[cache_key] = (is_admin, current_time)
-        return is_admin
-    except Exception as e:
-        logger.error(f"Ошибка при проверке прав администратора для user_id {user_id} в чате {chat_id}: {e}")
-        return False
 
 # --- Обработчики событий ---
 

@@ -9,8 +9,8 @@ from functools import lru_cache
 from pathlib import Path
 
 from peewee import fn
+from aiogram import Bot
 
-from handlers import is_admin
 from model import AnekModel, User_listModel, SizeModel
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,10 @@ MAX_EXP = 22000
 
 # Кэш для званий
 RANKS_CACHE: Dict[int, str] = {}
+
+# Кэш для проверки админов
+ADMIN_CACHE: Dict[Tuple[int, int], bool] = {}
+ADMIN_CACHE_TIMEOUT = 300  # 5 минут
 
 @lru_cache(maxsize=1000)
 def quota_check(userid: int, qcount: int) -> bool:
@@ -357,6 +361,39 @@ async def kick_for_unactive(bot, chat_id: int) -> None:
 
     except Exception as e:
         logger.error(f"Ошибка при проверке неактивных пользователей: {e}")
+
+async def is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
+    """
+    Проверяет, является ли пользователь администратором чата.
+    Использует кэширование для оптимизации.
+    
+    Args:
+        bot (Bot): Экземпляр бота
+        chat_id (int): ID чата
+        user_id (int): ID пользователя
+        
+    Returns:
+        bool: True если пользователь админ, False если нет
+    """
+    cache_key = (chat_id, user_id)
+    current_time = datetime.now().timestamp()
+    
+    # Проверяем кэш
+    if cache_key in ADMIN_CACHE:
+        cached_result, timestamp = ADMIN_CACHE[cache_key]
+        if current_time - timestamp < ADMIN_CACHE_TIMEOUT:
+            return cached_result
+    
+    try:
+        member = await bot.get_chat_member(chat_id, user_id)
+        is_admin_result = member.status in ("administrator", "creator")
+        
+        # Сохраняем в кэш
+        ADMIN_CACHE[cache_key] = (is_admin_result, current_time)
+        return is_admin_result
+    except Exception as e:
+        logger.error(f"Ошибка при проверке прав администратора для user_id {user_id} в чате {chat_id}: {e}")
+        return False
 
 
 
