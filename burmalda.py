@@ -40,7 +40,7 @@ BASE_COMMISSION = 0.20  # 20%
 COMMISSION_REDUCTION_PER_5_LEVELS = 0.05  # 5%
 
 # Стоимость снятия warn'а
-WARN_REMOVAL_COST = 50
+WARN_REMOVAL_COST = 250
 
 class GameType(Enum):
     ROULETTE = "roulette"

@@ -1211,9 +1211,8 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
         elif action == "remove":
             # Снятие предупреждения
             if len(data) < 4 or data[3] != "warn":
-                await call.answer("❌ Неверный формат данных")
+                await call.answer("❌ Неверный формат данных", show_alert=True)
                 return
-                
             user_id = int(data[2])
             
             # Проверяем, что callback отправил тот же пользователь
@@ -1256,43 +1255,34 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             
         elif action == "exchange":
             # Обмен очков на опыт
-            if len(data) < 4 or data[3] != "exp":
-                await call.answer("❌ Неверный формат данных")
+            if len(data) < 4 or data[-2] != "exp":
+                await call.answer("❌ Неверный формат данных", show_alert=True)
                 return
-                
-            user_id = int(data[2])
-            
+            user_id = int(data[-1])
             # Проверяем, что callback отправил тот же пользователь
             if call.from_user.id != user_id:
                 await call.answer("❌ Это не ваше меню!", show_alert=True)
                 return
-                
             q = (
                 User_listModel
                 .select(User_listModel.rank)
                 .where(User_listModel.user_id == user_id)
                 .first()
             )
-            
             if not q:
                 await call.answer("❌ Пользователь не найден", show_alert=True)
                 return
-                
             points = burmalda_game.get_user_points(user_id)
             if points < 100:
                 await call.answer(f"❌ Недостаточно очков! Нужно: 100, у вас: {points}", show_alert=True)
                 return
-                
-            # Рассчитываем опыт с учетом комиссии
+            # Рассчитываем опыт за каждые 100 очков
             commission = burmalda_game.get_commission_rate(q.rank)
             exp_gained = int(100 * (1 - commission))
-            
             # Тратим очки и начисляем опыт
             burmalda_game.spend_points(user_id, 100)
             await award_exp_and_check_level_up(user_id, exp_gained, 0, call.from_user.first_name, call.message, bot)
-            
-            await call.answer(f"✅ Получено {exp_gained} опыта! Комиссия: {commission*100:.0f}%", show_alert=True)
-            
+            await call.answer(f"✅ Получено {exp_gained} опыта за 100 очков! Комиссия: {commission*100:.0f}%", show_alert=True)
             # Обновляем меню магазина
             text, markup = burmalda_game.create_shop_menu(user_id)
             await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
