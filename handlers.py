@@ -1305,49 +1305,44 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
         builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
         builder.adjust(1)
         
-        # Далее ветвление по типу игры...
         # Удаляем предыдущие сообщения если есть (стикер и результат)
         if len(game_state["messages"]) >= 2:
             try:
-                # Удаляем последние 2 сообщения (стикер и результат)
                 await bot.delete_message(call.message.chat.id, game_state["messages"][-2])
                 await bot.delete_message(call.message.chat.id, game_state["messages"][-1])
-                # Убираем их из списка
                 game_state["messages"] = game_state["messages"][:-2]
             except Exception:
                 pass
-                
-        # Отправляем интерактивный стикер в зависимости от игры
-        sticker_emoji = {
-            "roulette": "🎲",
-            "dice": "🎯",
-            "slot": "🎰",
-            "blackjack": "🃏"
-        }.get(game_type, "🎮")
         
-        # Отправляем стикер
-        sticker_msg = await bot.send_dice(
-            chat_id=call.message.chat.id,
-            emoji=sticker_emoji
-        )
-        
-        # Играем в выбранную игру с использованием значения из стикера
-        if game_type == "roulette":
-            result = await burmalda_game.play_roulette_game(user_id, sticker_msg.dice.value)
-        elif game_type == "dice":
-            result = await burmalda_game.play_dice_game(user_id, sticker_msg.dice.value)
-        elif game_type == "slot":
-            result = await burmalda_game.play_slot_game(user_id, sticker_msg.dice.value)
-        elif game_type == "blackjack":
-            result = await burmalda_game.play_blackjack_game(user_id)
+        # Для слотов не отправляем стикер, сразу играем
+        if game_type == "slot":
+            result = await burmalda_game.play_slot_game(user_id)
         else:
-            await call.answer("❌ Неизвестная игра", show_alert=True)
-            return
-            
+            # Отправляем стикер
+            sticker_emoji = {
+                "roulette": "🎲",
+                "dice": "🎯",
+                "slot": "🎰",
+                "blackjack": "🃏"
+            }.get(game_type, "🎮")
+            sticker_msg = await bot.send_dice(
+                chat_id=call.message.chat.id,
+                emoji=sticker_emoji
+            )
+            if game_type == "roulette":
+                result = await burmalda_game.play_roulette_game(user_id, sticker_msg.dice.value)
+            elif game_type == "dice":
+                result = await burmalda_game.play_dice_game(user_id, sticker_msg.dice.value)
+            elif game_type == "blackjack":
+                result = await burmalda_game.play_blackjack_game(user_id)
+            else:
+                await call.answer("❌ Неизвестная игра", show_alert=True)
+                return
+        
         # Увеличиваем счетчик побед
         if result.won:
             game_state["wins"] += 1
-            
+        
         # Отправляем результат
         result_text = (
             f"{result.message}\n\n"
@@ -1364,7 +1359,8 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
         )
         
         # Сохраняем ID сообщений
-        game_state["messages"].append(sticker_msg.message_id)
+        if game_type != "slot":
+            game_state["messages"].append(sticker_msg.message_id)
         game_state["messages"].append(new_message.message_id)
         
         await call.answer()
