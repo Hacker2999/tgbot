@@ -1410,31 +1410,33 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
 async def finish_burmalda_game(call: CallbackQuery, bot: Bot) -> None:
     """Завершает игру в Burmalda и начисляет награды"""
     try:
+        logger.info(f"[finish_burmalda_game] Начало. user_id={call.from_user.id}, data={call.data}, chat_id={call.message.chat.id}")
         await call.answer()  # Сразу убираем "часики" у пользователя
         user_id = int(call.data.split("_")[2])
-        
+        logger.info(f"[finish_burmalda_game] user_id из callback: {user_id}")
         # Проверяем, что callback отправил тот же пользователь
         if call.from_user.id != user_id:
+            logger.warning(f"[finish_burmalda_game] Попытка завершения не своим пользователем: {call.from_user.id} != {user_id}")
             await call.answer("❌ Это не ваша игра!", show_alert=True)
             return
-            
         game_state = burmalda_game.active_games.get(user_id)
+        logger.info(f"[finish_burmalda_game] game_state: {game_state}")
         if not game_state:
+            logger.warning(f"[finish_burmalda_game] Игра не найдена для user_id={user_id}")
             await call.answer("❌ Игра не найдена", show_alert=True)
             return
-            
         wins = game_state["wins"]
         points_earned = ATTEMPT_REWARDS.get(wins, 0)
         bonus_exp_earned = VICTORY_BONUS_EXP.get(wins, 0)
-        
+        logger.info(f"[finish_burmalda_game] wins={wins}, points_earned={points_earned}, bonus_exp_earned={bonus_exp_earned}")
         # Начисляем очки
         if points_earned > 0:
+            logger.info(f"[finish_burmalda_game] Добавляю очки: {points_earned}")
             burmalda_game.add_points(user_id, points_earned)
-        
         # Начисляем бонусный опыт за победы
         if bonus_exp_earned > 0:
+            logger.info(f"[finish_burmalda_game] Добавляю бонусный опыт: {bonus_exp_earned}")
             burmalda_game.add_bonus_exp(user_id, bonus_exp_earned)
-        
         # Формируем итоговое сообщение
         if wins == 0:
             result_text = "😔 К сожалению, вы не выиграли ни одной попытки..."
@@ -1444,37 +1446,42 @@ async def finish_burmalda_game(call: CallbackQuery, bot: Bot) -> None:
             result_text = f"🎊 Отлично! Вы выиграли 2 попытки и получаете {points_earned} очков и {bonus_exp_earned} бонусного опыта!"
         else:
             result_text = f"🏆 Превосходно! Вы выиграли все 3 попытки и получаете {points_earned} очков и {bonus_exp_earned} бонусного опыта!"
-            
+        logger.info(f"[finish_burmalda_game] Удаляю сообщения игры: {game_state['messages']}")
         # Удаляем все сообщения игры
         for msg_id in game_state["messages"]:
             try:
                 await bot.delete_message(call.message.chat.id, msg_id)
-            except Exception:
-                pass
-                
+                logger.info(f"[finish_burmalda_game] Удалено сообщение {msg_id}")
+            except Exception as e:
+                logger.error(f"[finish_burmalda_game] Не удалось удалить сообщение {msg_id}: {e}")
         # Удаляем текущее сообщение
         try:
             await call.message.delete()
-        except Exception:
-            pass
-        
+            logger.info(f"[finish_burmalda_game] Удалено текущее сообщение")
+        except Exception as e:
+            logger.error(f"[finish_burmalda_game] Не удалось удалить текущее сообщение: {e}")
         # Отправляем новое главное меню Burmalda
-        text, markup = burmalda_game.create_main_menu(user_id)
-        await bot.send_message(
-            chat_id=call.message.chat.id,
-            text=text,
-            reply_markup=markup,
-            parse_mode="HTML"
-        )
-        
+        try:
+            logger.info(f"[finish_burmalda_game] Формирую главное меню для user_id={user_id}")
+            text, markup = burmalda_game.create_main_menu(user_id)
+            logger.info(f"[finish_burmalda_game] Главное меню сформировано. text={text[:50]}...")
+            await bot.send_message(
+                chat_id=call.message.chat.id,
+                text=text,
+                reply_markup=markup,
+                parse_mode="HTML"
+            )
+            logger.info(f"[finish_burmalda_game] Главное меню отправлено")
+        except Exception as e:
+            logger.error(f"[finish_burmalda_game] Ошибка при отправке главного меню: {e}")
+            await bot.send_message(call.message.chat.id, "Ошибка при формировании меню.")
         # Очищаем состояние игры (явно)
         if user_id in burmalda_game.active_games:
             del burmalda_game.active_games[user_id]
+            logger.info(f"[finish_burmalda_game] Состояние игры очищено для user_id={user_id}")
         # Fallback: если где-то ещё есть состояния, сбросить их (расширяем при необходимости)
-        # Например, если есть другие dict-ы сессий: burmalda_game.some_other_state.pop(user_id, None)
-        
     except Exception as e:
-        logger.error(f"Ошибка в finish_burmalda_game: {e}")
+        logger.error(f"[finish_burmalda_game] Глобальная ошибка: {e}")
         await call.answer("❌ Ошибка при завершении игры", show_alert=True)
 
 
