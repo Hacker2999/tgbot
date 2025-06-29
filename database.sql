@@ -92,7 +92,6 @@ CREATE INDEX IF NOT EXISTS idx_user_list_user_id ON user_list(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_list_last_visit ON user_list(last_visit);
 CREATE INDEX IF NOT EXISTS idx_user_list_rank ON user_list(rank);
 CREATE INDEX IF NOT EXISTS idx_user_list_credits ON user_list(credits);
-CREATE INDEX IF NOT EXISTS idx_user_list_points ON user_list(points);
 CREATE INDEX IF NOT EXISTS idx_user_list_last_credits_date ON user_list(last_credits_date);
 
 CREATE INDEX IF NOT EXISTS idx_chat_list_chat_id ON chat_list(chat_id);
@@ -126,7 +125,6 @@ COMMENT ON COLUMN user_list.last_visit IS 'Дата последнего пос�
 COMMENT ON COLUMN user_list.visit_streak IS 'Текущий винстрик посещений';
 COMMENT ON COLUMN user_list.rank IS 'Текущий уровень пользователя';
 COMMENT ON COLUMN user_list.credits IS 'Кредиты "отвальчики" для игр в Burmalda';
-COMMENT ON COLUMN user_list.points IS 'Очки для покупок в магазине Burmalda';
 COMMENT ON COLUMN user_list.last_credits_date IS 'Дата последней выдачи ежедневных кредитов';
 
 COMMENT ON TABLE chat_list IS 'Список чатов где работает бот';
@@ -177,7 +175,6 @@ SELECT
     u.warn_count,
     u.rank,
     u.credits,
-    u.points,
     u.last_visit,
     u.visit_streak,
     (u.level_exp + u.bonus_exp) as total_exp
@@ -204,7 +201,6 @@ RETURNS TABLE(
     total_exp BIGINT,
     rank BIGINT,
     credits BIGINT,
-    points BIGINT,
     warn_count BIGINT,
     last_visit TIMESTAMP WITH TIME ZONE,
     visit_streak BIGINT
@@ -219,7 +215,6 @@ BEGIN
         (u.level_exp + u.bonus_exp) as total_exp,
         u.rank,
         u.credits,
-        u.points,
         u.warn_count,
         u.last_visit,
         u.visit_streak
@@ -253,17 +248,15 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION get_top_users_by_credits(limit_count INTEGER DEFAULT 10)
 RETURNS TABLE(
     user_id BIGINT,
-    credits BIGINT,
-    points BIGINT
+    credits BIGINT
 ) AS $$
 BEGIN
     RETURN QUERY
     SELECT 
         u.user_id,
-        u.credits,
-        u.points
+        u.credits
     FROM user_list u
-    ORDER BY u.credits DESC, u.points DESC
+    ORDER BY u.credits DESC
     LIMIT limit_count;
 END;
 $$ LANGUAGE plpgsql;

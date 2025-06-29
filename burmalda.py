@@ -138,20 +138,6 @@ class BurmaldaGame:
             logger.error(f"Ошибка при получении кредитов для user_id {user_id}: {e}")
             return 0
     
-    def get_user_points(self, user_id: int) -> int:
-        """Получает количество очков пользователя"""
-        try:
-            q = (
-                User_listModel
-                .select(User_listModel.points)
-                .where(User_listModel.user_id == user_id)
-                .first()
-            )
-            return q.points if q else 0
-        except Exception as e:
-            logger.error(f"Ошибка при получении очков для user_id {user_id}: {e}")
-            return 0
-    
     def spend_credits(self, user_id: int, amount: int) -> bool:
         """Тратит кредиты пользователя. Возвращает True если успешно"""
         try:
@@ -174,45 +160,6 @@ class BurmaldaGame:
             return True
         except Exception as e:
             logger.error(f"Ошибка при трате кредитов для user_id {user_id}: {e}")
-            return False
-    
-    def spend_points(self, user_id: int, amount: int) -> bool:
-        """Тратит очки пользователя. Возвращает True если успешно"""
-        try:
-            q = (
-                User_listModel
-                .select(User_listModel.points)
-                .where(User_listModel.user_id == user_id)
-                .first()
-            )
-            if not q or q.points < amount:
-                return False
-            
-            (
-                User_listModel
-                .update({
-                    User_listModel.points: User_listModel.points - amount
-                })
-                .where(User_listModel.user_id == user_id)
-            ).execute()
-            return True
-        except Exception as e:
-            logger.error(f"Ошибка при трате очков для user_id {user_id}: {e}")
-            return False
-    
-    def add_points(self, user_id: int, amount: int) -> bool:
-        """Добавляет очки пользователю"""
-        try:
-            (
-                User_listModel
-                .update({
-                    User_listModel.points: User_listModel.points + amount
-                })
-                .where(User_listModel.user_id == user_id)
-            ).execute()
-            return True
-        except Exception as e:
-            logger.error(f"Ошибка при добавлении очков для user_id {user_id}: {e}")
             return False
     
     def add_bonus_exp(self, user_id: int, amount: int) -> bool:
@@ -365,17 +312,15 @@ class BurmaldaGame:
     def create_main_menu(self, user_id: int) -> Tuple[str, InlineKeyboardMarkup]:
         """Создает главное меню Burmalda"""
         credits = self.get_user_credits(user_id)
-        points = self.get_user_points(user_id)
         
         text = (
             f"🎮 <b>Burmalda - Игровая система</b>\n\n"
             f"💰 Отвальчики: <b>{credits}</b>\n"
-            f"🏆 Очки: <b>{points}</b>\n"
             f"🎯 Стоимость игры: <b>{GAME_COST}</b> отвальчиков за 3 попытки\n\n"
             f"🏅 <b>Награды за победы:</b>\n"
-            f"• 1 победа: {ATTEMPT_REWARDS[1]} очков + {VICTORY_BONUS_EXP[1]} бонусного опыта\n"
-            f"• 2 победы: {ATTEMPT_REWARDS[2]} очков + {VICTORY_BONUS_EXP[2]} бонусного опыта\n"
-            f"• 3 победы: {ATTEMPT_REWARDS[3]} очков + {VICTORY_BONUS_EXP[3]} бонусного опыта\n\n"
+            f"• 1 победа: {ATTEMPT_REWARDS[1]} очков\n"
+            f"• 2 победы: {ATTEMPT_REWARDS[2]} очков\n"
+            f"• 3 победы: {ATTEMPT_REWARDS[3]} очков\n\n"
             f"Выберите игру или действие:"
         )
         
@@ -390,7 +335,7 @@ class BurmaldaGame:
     
     def create_shop_menu(self, user_id: int) -> Tuple[str, InlineKeyboardMarkup]:
         """Создает меню магазина"""
-        points = self.get_user_points(user_id)
+        credits = self.get_user_credits(user_id)
         
         q = (
             User_listModel
@@ -407,7 +352,7 @@ class BurmaldaGame:
         
         text = (
             f"🏪 <b>Магазин Burmalda</b>\n\n"
-            f"🏆 Ваши очки: <b>{points}</b>\n"
+            f"💰 Ваши отвальчики: <b>{credits}</b>\n"
             f"⚠️ Предупреждения: <b>{warn_count}</b>\n"
             f"📊 Уровень: <b>{level}</b>\n"
             f"💱 Комиссия: <b>{commission*100:.0f}%</b>\n"

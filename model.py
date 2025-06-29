@@ -56,7 +56,6 @@ class User_listModel(BaseModel):
     rank = BigIntegerField(null=False,default=1)  # Текущий уровень
     # Новые поля для системы Burmalda
     credits = BigIntegerField(default=0)  # Кредиты "отвальчики"
-    points = BigIntegerField(default=0)  # Очки для магазина
     last_credits_date = DateField(null=True)  # Дата последней выдачи кредитов
 
     class Meta:
