@@ -310,23 +310,25 @@ class BurmaldaGame:
             logger.error(f"Ошибка в игре кости для user_id {user_id}: {e}")
             return GameResult(won=False, message="❌ Ошибка в игре")
     
-    async def play_slot_game(self, user_id: int, slot_values: List[int] = None) -> GameResult:
+    async def play_slot_game(self, user_id: int, slot_value: int = None) -> GameResult:
         """Игра в слоты"""
         try:
             symbols = ["🍎", "🍊", "🍇", "🍒", "🍓", "🍉"]
             
-            if slot_values is None:
+            if slot_value is None:
                 # Генерируем случайные значения
                 reels = [random.choice(symbols) for _ in range(3)]
             else:
-                # Используем переданные значения напрямую (1-6)
-                reels = [symbols[i-1] for i in slot_values]  # i-1 потому что индексы с 0, а значения с 1
+                # Используем переданное значение для первого барабана, остальные случайные
+                # slot_value от 1 до 6, преобразуем в индекс 0-5
+                first_symbol = symbols[slot_value - 1] if 1 <= slot_value <= 6 else random.choice(symbols)
+                reels = [first_symbol] + [random.choice(symbols) for _ in range(2)]
             
             # Победа если все символы одинаковые
             won = len(set(reels)) == 1
             
             message = (
-                f"<b>Слоты</b>\n\n"
+                f"🎰 <b>Слоты</b>\n\n"
                 f"[{' | '.join(reels)}]\n\n"
                 f"{'🎉 Джекпот!' if won else '❌ Попробуйте еще раз'}"
             )
