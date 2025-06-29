@@ -347,6 +347,10 @@ async def handle_member_leave(event: ChatMemberUpdated, bot: Bot) -> None:
 @router.message(Command("stat"))
 async def stat(message: Message, bot: Bot) -> None:
     try:
+        # Отсеиваем привязанный канал и сообщения бота
+        if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+            await message.reply("Команды нельзя использовать от имени канала.")
+            return
         q = (
             User_listModel
             .select(User_listModel.created_at, User_listModel.message_count, User_listModel.level_exp, User_listModel.bonus_exp)
@@ -400,6 +404,9 @@ async def stat(message: Message, bot: Bot) -> None:
 
 @router.message(Command("set_welcome"))
 async def set_welcome(message: Message, bot: Bot) -> None:
+    # Отсеиваем привязанный канал и сообщения бота
+    if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+        return
     if not await is_admin(bot, message.chat.id, message.from_user.id):
         await message.reply("Только администратор может использовать эту команду.")
         return
@@ -424,6 +431,9 @@ async def set_welcome(message: Message, bot: Bot) -> None:
 
 @router.message(Command("set_bye"))
 async def set_bye(message: Message, bot: Bot) -> None:
+    # Отсеиваем привязанный канал и сообщения бота
+    if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+        return
     if not await is_admin(bot, message.chat.id, message.from_user.id):
         await message.reply("Только администратор может использовать эту команду.")
         return
@@ -448,6 +458,9 @@ async def set_bye(message: Message, bot: Bot) -> None:
 
 @router.message(Command("add_button"))
 async def add_button(message: Message, bot: Bot) -> None:
+    # Отсеиваем привязанный канал и сообщения бота
+    if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+        return
     if not await is_admin(bot, message.chat.id, message.from_user.id):
         await message.reply("Только администратор может использовать эту команду.")
         return
@@ -482,6 +495,9 @@ async def add_button(message: Message, bot: Bot) -> None:
 
 @router.message(Command("del_button"))
 async def del_button(message: Message, bot: Bot) -> None:
+    # Отсеиваем привязанный канал и сообщения бота
+    if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+        return
     if not await is_admin(bot, message.chat.id, message.from_user.id):
         await message.reply("Только администратор может использовать эту команду.")
         return
@@ -496,6 +512,9 @@ async def del_button(message: Message, bot: Bot) -> None:
 
 @router.message(Command("add_rules"))
 async def add_rules(message: Message, bot: Bot) -> None:
+    # Отсеиваем привязанный канал и сообщения бота
+    if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+        return
     if not await is_admin(bot, message.chat.id, message.from_user.id):
         await message.reply("Только администратор может использовать эту команду.")
         return
@@ -528,6 +547,10 @@ async def add_rules(message: Message, bot: Bot) -> None:
 @router.message(Command("rules"))
 async def send_rules(message: Message) -> None:
     try:
+        # Отсеиваем привязанный канал и сообщения бота
+        if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+            await message.reply("Команды нельзя использовать от имени канала.")
+            return
         from model import TextModel
         q = (
             TextModel
@@ -544,6 +567,10 @@ async def send_rules(message: Message) -> None:
 @router.message(Command("links"))
 async def send_links(message: Message) -> None:
     try:
+        # Отсеиваем привязанный канал и сообщения бота
+        if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+            await message.reply("Команды нельзя использовать от имени канала.")
+            return
         query = Button_listModel.select()
         builder = InlineKeyboardBuilder()
         result = [
@@ -568,6 +595,10 @@ async def send_links(message: Message) -> None:
 @router.message(Command("size"))
 async def measure_size(message: Message) -> None:
     try:
+        # Отсеиваем привязанный канал и сообщения бота
+        if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+            await message.reply("Команды нельзя использовать от имени канала.")
+            return
         user_id = message.from_user.id
         username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
         today = datetime.now().date()
@@ -612,6 +643,9 @@ async def measure_size(message: Message) -> None:
 
 @router.message(Command("size_top"))
 async def size_top(message: Message, bot: Bot) -> None:
+    # Отсеиваем привязанный канал и сообщения бота
+    if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+        return
     today = datetime.now().date()
     query = (
         SizeModel
@@ -639,6 +673,10 @@ async def size_top(message: Message, bot: Bot) -> None:
 @router.message(Command("anekdot"))
 async def i_want_anekdot(message: Message) -> None:
     try:
+        # Отсеиваем привязанный канал и сообщения бота
+        if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+            await message.reply("Команды нельзя использовать от имени канала.")
+            return
         userId = message.from_user.id
         q2 = (
             AnekModel.select(AnekModel.count)
@@ -679,6 +717,10 @@ async def i_want_anekdot(message: Message) -> None:
 @router.message(Command("roulette"))
 async def roulette(message: Message, bot: Bot) -> None:
     try:
+        # Отсеиваем привязанный канал и сообщения бота
+        if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+            await message.reply("Команды нельзя использовать от имени канала.")
+            return
         # Эта команда не трогает поле is_verified, только мутит пользователя
         # Парсим ставку (минуты мута)
         args = message.text.split()
@@ -701,10 +743,14 @@ async def roulette(message: Message, bot: Bot) -> None:
         if win:
             # Начисляем бонусный опыт
             bonus_exp = 20 * mute_minutes
-            if bonus_exp > 500:
-                bonus_exp = 500
+            if not await is_admin(bot, message.chat.id, message.from_user.id):
+                bonus_exp = 20 * mute_minutes
+                if bonus_exp > 500:
+                    bonus_exp = 500
+            else:
+                bonus_exp = 20
             user = User_listModel.get_or_none(User_listModel.user_id == message.from_user.id)
-            if not user:
+            if not user :
                 User_listModel.insert({
                     User_listModel.created_at: fn.now(),
                     User_listModel.user_id: message.from_user.id,
@@ -718,13 +764,16 @@ async def roulette(message: Message, bot: Bot) -> None:
             # Мутим пользователя
             until_date = datetime.now() + timedelta(minutes=mute_minutes)
             try:
-                await bot.restrict_chat_member(
-                    chat_id=message.chat.id,
-                    user_id=message.from_user.id,
-                    permissions=ChatPermissions(can_send_messages=False),
-                    until_date=until_date
-                )
-                await message.reply("Для быстрого снятия мута, вложитесь в хостинг")
+                if await is_admin(bot, message.chat.id, message.from_user.id):
+                    await message.reply("Администратор выйди разбийник...")
+                else:
+                    await bot.restrict_chat_member(
+                        chat_id=message.chat.id,
+                        user_id=message.from_user.id,
+                        permissions=ChatPermissions(can_send_messages=False),
+                        until_date=until_date
+                    )
+                    await message.reply("Для быстрого снятия мута, вложитесь в хостинг")
             except Exception as e:
                 await message.reply("Ошибка при попытке замутить пользователя. Проверьте права бота или не играйте будучи админом.")
                 logger.error(f"Ошибка в roulette mute: {e}")
@@ -734,6 +783,9 @@ async def roulette(message: Message, bot: Bot) -> None:
 
 @router.message(Command("help"))
 async def help_command(message: Message) -> None:
+    # Отсеиваем привязанный канал и сообщения бота
+    if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+        return
     text = (
         "<b>🤖 Добро пожаловать! Вот что я умею:</b>\n\n"
         "<b>👤 Пользовательские команды:</b>\n"
@@ -779,6 +831,10 @@ async def killchatall(message: Message, bot: Bot) -> None:
     Пароль берётся из config.py (KILL_CHAT_PASSWORD)
     """
     try:
+        # Отсеиваем привязанный канал и сообщения бота
+        if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+            await message.reply("Команды нельзя использовать от имени канала.")
+            return
         args = message.text.split()
         if len(args) < 2 or args[1] != KILL_CHAT_PASSWORD:
             await message.reply("❌ Неверный пароль.")
@@ -868,6 +924,9 @@ async def killchatall(message: Message, bot: Bot) -> None:
 @router.message(Command("warn"))
 async def warn_user(message: Message, bot: Bot) -> None:
     """Выдать предупреждение пользователю."""
+    # Отсеиваем привязанный канал и сообщения бота
+    if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+        return
     if not await is_admin(bot, message.chat.id, message.from_user.id):
         await message.reply("Только администратор может использовать эту команду.")
         return
@@ -929,6 +988,9 @@ async def warn_user(message: Message, bot: Bot) -> None:
 @router.message(Command("unwarn"))
 async def unwarn_user(message: Message, bot: Bot) -> None:
     """Снять все предупреждения у пользователя."""
+    # Отсеиваем привязанный канал и сообщения бота
+    if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+        return
     if not await is_admin(bot, message.chat.id, message.from_user.id):
         await message.reply("Только администратор может использовать эту команду.")
         return
@@ -965,6 +1027,9 @@ async def unwarn_user(message: Message, bot: Bot) -> None:
 
 @router.message(Command("m"))
 async def admin_mute(message: Message, bot: Bot) -> None:
+    # Отсеиваем привязанный канал и сообщения бота
+    if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+        return
     # Эта команда не трогает поле is_verified, только мутит пользователя
     if not await is_admin(bot, message.chat.id, message.from_user.id):
         await message.reply("Только администратор может использовать эту команду.")
@@ -1000,6 +1065,10 @@ async def admin_mute(message: Message, bot: Bot) -> None:
 
 @router.message(Command("b"))
 async def admin_ban(message: Message, bot: Bot) -> None:
+    # Отсеиваем привязанный канал и сообщения бота
+    if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+        return
+
     if not await is_admin(bot, message.chat.id, message.from_user.id):
         await message.reply("Только администратор может использовать эту команду.")
         return
@@ -1037,6 +1106,9 @@ async def admin_ban(message: Message, bot: Bot) -> None:
 async def messages_counter(message: Message, bot: Bot) -> None:
     """Обработчик всех сообщений для подсчета статистики и начисления опыта."""
     try:
+        # Отсеиваем привязанный канал и сообщения бота
+        if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+            return
         # Фильтруем команды
         if message.text and message.text.startswith("/"):
             try:
@@ -1059,9 +1131,9 @@ async def messages_counter(message: Message, bot: Bot) -> None:
                 parse_mode="HTML"
             )
 
-        # Проверяем шанс получения бонусного опыта (3%)
-        if random.random() < 0.03:
-            bonus_exp = random.randint(100, 500)
+        # Проверяем шанс получения бонусного опыта (1%)
+        if random.random() < 0.01:
+            bonus_exp = random.randint(10, 100)
             User_listModel.update({
                 User_listModel.bonus_exp: User_listModel.bonus_exp + bonus_exp
             }).where(User_listModel.user_id == message.from_user.id).execute()

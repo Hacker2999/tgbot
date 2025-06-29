@@ -1,4 +1,6 @@
+import asyncio
 from datetime import datetime, timezone, timedelta
+from itertools import count
 from typing import Dict, Tuple
 import logging
 import pytz
@@ -8,6 +10,7 @@ from pathlib import Path
 
 from peewee import fn
 
+from handlers import is_admin
 from model import AnekModel, User_listModel, SizeModel
 
 logger = logging.getLogger(__name__)
@@ -225,7 +228,6 @@ def check_visit_streak(user_id: int) -> Tuple[bool, int]:
 async def award_size_top_exp(bot, chat_id: int) -> None:
     """
     Начисляет опыт за места в таблице размеров.
-    Запускается в 20:00 по МСК.
     
     Args:
         bot: Экземпляр бота
@@ -283,6 +285,47 @@ async def award_size_top_exp(bot, chat_id: int) -> None:
                         
     except Exception as e:
         logger.error(f"Ошибка при начислении опыта за таблицу размеров: {e}")
+
+
+async def kick_for_unactive(bot, chat_id: int) -> None:
+    """
+    Кикает пользователей за неактив более 30 дней.
+    Args:
+        bot: Экземпляр бота
+        chat_id (int): ID чата
+    """
+    try:
+        moscow_tz = pytz.timezone('Europe/Moscow')
+        today = datetime.now(moscow_tz).date()
+
+        query = (
+            User_listModel
+            .select(User_listModel.user_id, User_listModel.last_visit)
+        )
+        results = list(query)
+
+        if not results:
+            return
+
+        # кикаем пользователей
+        for idx, result in enumerate(results):
+            if idx in results:
+                user = User_listModel.get_or_none(User_listModel.user_id == result.user_id)
+                if await is_admin(bot, bot.chat.id, user.user_id):
+                    continue
+                else:
+                    try:
+                        if timedelta(result.last_visit - datetime.now()) > timedelta(days=30):
+                            member = await bot.get_chat_member(chat_id, result.user_id)
+                            await bot.ban_chat_member(chat_id, member.user.id)
+                            await bot.unban_chat_member(chat_id, member.user.id)
+                            await asyncio.sleep(5)
+                    except Exception as e:
+                        logger.error(f"Ошибка при отправке сообщения о награде для user_id {result.user_id}: {e}")
+
+    except Exception as e:
+        logger.error(f"Ошибка при начислении опыта за таблицу размеров: {e}")
+
 
 
 

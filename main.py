@@ -13,7 +13,7 @@ from handlers import router
 from middleware import AntiSpamMiddleware
 from model import Chat_listModel
 from ignore_old_messages import IgnoreOldMessagesMiddleware
-from utils import award_size_top_exp
+from utils import award_size_top_exp, kick_for_unactive
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -46,15 +46,15 @@ async def send_channel_message(bot: Bot, text: str) -> None:
     except Exception as e:
         logger.error(f"Не удалось отправить сообщение в канал: {e}")
 
-async def schedule_awards(bot: Bot, chat_id: int):
-    """Планировщик для начисления наград в 20:00 по МСК."""
+async def auto_task(bot: Bot, chat_id: int):
+    """Планировщик для задач в 18:00 по МСК."""
     while True:
         try:
             moscow_tz = pytz.timezone('Europe/Moscow')
             now = datetime.now(moscow_tz)
-            target_time = time(18, 00)  # 20:00
+            target_time = time(18, 00)  # 18:00
             
-            # Если текущее время больше 20:00, ждем до следующего дня
+            # Если текущее время больше 18:00, ждем до следующего дня
             if now.time() > target_time:
                 next_run = datetime.combine(now.date() + timedelta(days=1), target_time)
             else:
@@ -70,6 +70,7 @@ async def schedule_awards(bot: Bot, chat_id: int):
             
             # Начисляем награды
             await award_size_top_exp(bot, chat_id)
+            #await kick_for_unactive(bot, chat_id)
             
         except Exception as e:
             logger.error(f"Ошибка в планировщике наград: {e}")
@@ -104,7 +105,7 @@ async def main() -> None:
     await send_channel_message(bot, "🤖 Бот запущен и готов к работе!")
     
     # Запускаем планировщик наград
-    asyncio.create_task(schedule_awards(bot, CHANNEL_CHAT_ID))
+    asyncio.create_task(auto_task(bot, CHANNEL_CHAT_ID))
     
     try:
         await dp.start_polling(bot, shutdown_event=stop_event)
