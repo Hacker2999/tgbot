@@ -17,15 +17,22 @@ from utils import calculate_level, get_user_rank, award_exp_and_check_level_up
 logger = logging.getLogger(__name__)
 
 # Константы системы Burmalda
-DAILY_CREDITS = 100
-GAME_COST = 30
+DAILY_CREDITS = 100  # Ежедневные кредиты
+GAME_COST = 30  # Стоимость одной игры
 GAME_ATTEMPTS = 3
 
-# Награды за выигранные попытки
+# Награды за попытки (очки)
 ATTEMPT_REWARDS = {
     1: 15,  # 1 выигрыш = 15 очков
     2: 35,  # 2 выигрыша = 35 очков
     3: 60   # 3 выигрыша = 60 очков
+}
+
+# Награды за победы (бонусный опыт)
+VICTORY_BONUS_EXP = {
+    1: 30,  # 1 победа = 30 бонусного опыта
+    2: 60,  # 2 победы = 60 бонусного опыта
+    3: 90   # 3 победы = 90 бонусного опыта
 }
 
 # Комиссия за обмен очков на опыт (уменьшается каждые 5 уровней)
@@ -158,6 +165,17 @@ class BurmaldaGame:
             return True
         except Exception as e:
             logger.error(f"Ошибка при добавлении очков для user_id {user_id}: {e}")
+            return False
+    
+    def add_bonus_exp(self, user_id: int, amount: int) -> bool:
+        """Добавляет бонусный опыт пользователю"""
+        try:
+            User_listModel.update({
+                User_listModel.bonus_exp: User_listModel.bonus_exp + amount
+            }).where(User_listModel.user_id == user_id).execute()
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка при добавлении бонусного опыта для user_id {user_id}: {e}")
             return False
     
     def get_commission_rate(self, user_level: int) -> float:
@@ -326,9 +344,13 @@ class BurmaldaGame:
         
         text = (
             f"🎮 <b>Burmalda - Игровая система</b>\n\n"
-            f"💰 Кредиты: <b>{credits}</b>\n"
+            f"💰 Отвальчики: <b>{credits}</b>\n"
             f"🏆 Очки: <b>{points}</b>\n"
-            f"🎯 Стоимость игры: <b>{GAME_COST}</b> кредитов\n\n"
+            f"🎯 Стоимость игры: <b>{GAME_COST}</b> отвальчиков\n\n"
+            f"🏅 <b>Награды за победы:</b>\n"
+            f"• 1 победа: {ATTEMPT_REWARDS[1]} очков + {VICTORY_BONUS_EXP[1]} бонусного опыта\n"
+            f"• 2 победы: {ATTEMPT_REWARDS[2]} очков + {VICTORY_BONUS_EXP[2]} бонусного опыта\n"
+            f"• 3 победы: {ATTEMPT_REWARDS[3]} очков + {VICTORY_BONUS_EXP[3]} бонусного опыта\n\n"
             f"Выберите игру или действие:"
         )
         
@@ -338,8 +360,7 @@ class BurmaldaGame:
         builder.button(text="🎰 Слоты", callback_data=f"burmalda_game_slot_{user_id}")
         builder.button(text="🃏 Блэкджек", callback_data=f"burmalda_game_blackjack_{user_id}")
         builder.button(text="🏪 Магазин", callback_data=f"burmalda_shop_{user_id}")
-        builder.button(text="📊 Статистика", callback_data=f"burmalda_stats_{user_id}")
-        builder.adjust(2, 2, 2)
+        builder.adjust(2, 2, 1)
         
         return text, builder.as_markup()
     

@@ -17,7 +17,7 @@ from baneks_api import fetch_random_joke
 from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel
 from utils import quota_check, calculate_level, calculate_exp_for_level, calculate_messages_for_level, get_user_rank, check_visit_streak, is_admin, award_exp_and_check_level_up
 from config import RULES, API_TOKEN, SPAM_LIMIT, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, KILL_CHAT_PASSWORD
-from burmalda import burmalda_game, GAME_COST, ATTEMPT_REWARDS, WARN_REMOVAL_COST
+from burmalda import burmalda_game, GAME_COST, ATTEMPT_REWARDS, WARN_REMOVAL_COST, VICTORY_BONUS_EXP
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -351,7 +351,10 @@ async def stat(message: Message, bot: Bot) -> None:
                     f"С нами: {days} дн., {hours} ч., {minutes} мин.\n"
                     f"Уровень: {current_level}\n"
                     f"Звание: {user_rank}\n"
-                    f"Опыт: {exp_in_level}/{exp_for_next - exp_for_current} (+{exp_to_next} до следующего уровня)\n"
+                    f"Обычный опыт: {q.level_exp}\n"
+                    f"Бонусный опыт: {q.bonus_exp}\n"
+                    f"Общий опыт: {total_exp}\n"
+                    f"Опыт в уровне: {exp_in_level}/{exp_for_next - exp_for_current} (+{exp_to_next} до следующего уровня)\n"
                 )
             )
         else:
@@ -781,8 +784,11 @@ async def help_command(message: Message) -> None:
         "• Ежедневно получайте 100 кредитов\n"
         "• Играйте в рулетку, кости, слоты и блэкджек за 30 кредитов\n"
         "• Блэкджек - одна попытка, остальные игры - 3 попытки\n"
-        "• Зарабатывайте очки и покупайте товары в магазине\n"
-        "• Снимайте предупреждения или обменивайте очки на опыт\n"
+        "• Зарабатывайте очки и бонусный опыт за победы:\n"
+        "  - 1 победа: 15 очков + 30 бонусного опыта\n"
+        "  - 2 победы: 35 очков + 60 бонусного опыта\n"
+        "  - 3 победы: 60 очков + 90 бонусного опыта\n"
+        "• Покупайте товары в магазине: снятие предупреждений, обмен очков на опыт\n"
         "\n"
         "<b>ℹ️ Примечания:</b>\n"
         "• <b>Мут</b> — временно запрещает писать сообщения.\n"
@@ -1076,7 +1082,7 @@ async def admin_ban(message: Message, bot: Bot) -> None:
     except Exception as e:
         logger.error(f"Ошибка в admin_ban: {e}")
         await message.reply("Ошибка при бане пользователя.")
-        
+
 # --- Обработчики событий ---
 
 @router.message()
@@ -1127,7 +1133,7 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
         total_exp_to_award = 0
         level_exp_to_award = 0
         bonus_exp_to_award = 0
-        
+            
         # Проверяем винстрик
         is_new_day, streak = check_visit_streak(user_id)
         if is_new_day and streak > 1:
@@ -1219,33 +1225,6 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             # Магазин
             text, markup = burmalda_game.create_shop_menu(user_id)
             await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
-            
-        elif action == "stats":
-            # Статистика
-            user = User_listModel.get_or_none(User_listModel.user_id == user_id)
-            if not user:
-                await call.answer("❌ Пользователь не найден", show_alert=True)
-                return
-                
-            credits = burmalda_game.get_user_credits(user_id)
-            points = burmalda_game.get_user_points(user_id)
-            level = user.rank
-            rank_name = get_user_rank(level)
-            
-            text = (
-                f"📊 <b>Статистика Burmalda</b>\n\n"
-                f"👤 Пользователь: <b>{call.from_user.first_name}</b>\n"
-                f"💰 Кредиты: <b>{credits}</b>\n"
-                f"🏆 Очки: <b>{points}</b>\n"
-                f"📈 Уровень: <b>{level}</b>\n"
-                f"🏅 Звание: <b>{rank_name}</b>\n"
-                f"⚠️ Предупреждения: <b>{user.warn_count}</b>\n"
-                f"💬 Сообщений: <b>{user.message_count}</b>"
-            )
-            
-            builder = InlineKeyboardBuilder()
-            builder.button(text="🔙 Назад", callback_data=f"burmalda_main_{user_id}")
-            await call.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
             
         elif action == "game":
             # Игра
@@ -1427,20 +1406,25 @@ async def finish_burmalda_game(call: CallbackQuery, bot: Bot) -> None:
             
         wins = game_state["wins"]
         points_earned = ATTEMPT_REWARDS.get(wins, 0)
+        bonus_exp_earned = VICTORY_BONUS_EXP.get(wins, 0)
         
         # Начисляем очки
         if points_earned > 0:
             burmalda_game.add_points(user_id, points_earned)
         
+        # Начисляем бонусный опыт за победы
+        if bonus_exp_earned > 0:
+            burmalda_game.add_bonus_exp(user_id, bonus_exp_earned)
+        
         # Формируем итоговое сообщение
         if wins == 0:
             result_text = "😔 К сожалению, вы не выиграли ни одной попытки..."
         elif wins == 1:
-            result_text = f"🎉 Хорошо! Вы выиграли 1 попытку и получаете {points_earned} очков!"
+            result_text = f"🎉 Хорошо! Вы выиграли 1 попытку и получаете {points_earned} очков и {bonus_exp_earned} бонусного опыта!"
         elif wins == 2:
-            result_text = f"🎊 Отлично! Вы выиграли 2 попытки и получаете {points_earned} очков!"
+            result_text = f"🎊 Отлично! Вы выиграли 2 попытки и получаете {points_earned} очков и {bonus_exp_earned} бонусного опыта!"
         else:
-            result_text = f"🏆 Превосходно! Вы выиграли все 3 попытки и получаете {points_earned} очков!"
+            result_text = f"🏆 Превосходно! Вы выиграли все 3 попытки и получаете {points_earned} очков и {bonus_exp_earned} бонусного опыта!"
             
         # Удаляем все сообщения игры
         for msg_id in game_state["messages"]:
