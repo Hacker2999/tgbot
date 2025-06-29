@@ -265,22 +265,14 @@ async def award_size_top_exp(bot, chat_id: int) -> None:
         # Начисляем опыт
         for idx, result in enumerate(results):
             if idx in rewards:
-                user = User_listModel.get_or_none(User_listModel.user_id == result.user_id)
-                if not user:
-                    # Создаём пользователя, если его нет
-                    User_listModel.insert({
-                        User_listModel.created_at: fn.now(),
-                        User_listModel.user_id: result.user_id,
-                        User_listModel.bonus_exp: 0,
-                        User_listModel.last_visit: fn.now(),
-                        User_listModel.rank: 1  # Начальный уровень
-                    }).execute()
-                # Теперь начисляем награду
-                User_listModel.update({User_listModel.bonus_exp: User_listModel.bonus_exp + rewards[idx]}).where(User_listModel.user_id == result.user_id).execute()
                 try:
                     member = await bot.get_chat_member(chat_id, result.user_id)
                     username = member.user.username if member.user.username is not None else member.user.first_name
                     place = idx + 1
+                    
+                    # Начисляем опыт с проверкой повышения уровня
+                    await award_exp_and_check_level_up(result.user_id, rewards[idx], 'bonus', username, None, bot)
+                    
                     await bot.send_message(
                         chat_id=chat_id,
                         text=f"🏆 <b>{username}</b> получает <b>{rewards[idx]}</b> бонусного опыта за {place}-е место в таблице размеров!",
@@ -396,6 +388,68 @@ async def is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
     except Exception as e:
         logger.error(f"Ошибка при проверке прав администратора для user_id {user_id} в чате {chat_id}: {e}")
         return False
+
+async def award_exp_and_check_level_up(user_id: int, exp_amount: int, exp_type: str, username: str, message=None, bot=None) -> None:
+    """
+    Начисляет опыт пользователю, проверяет повышение уровня и отправляет уведомления.
+    
+    Args:
+        user_id (int): ID пользователя
+        exp_amount (int): Количество опыта для начисления
+        exp_type (str): Тип опыта ('level', 'bonus')
+        username (str): Имя пользователя
+        message: Объект сообщения для ответа (может быть None)
+        bot: Экземпляр бота (может быть None)
+    """
+    try:
+        # Получаем текущие данные пользователя
+        user = User_listModel.get_or_none(User_listModel.user_id == user_id)
+        if not user:
+            # Создаем пользователя если его нет
+            User_listModel.insert({
+                User_listModel.created_at: fn.now(),
+                User_listModel.user_id: user_id,
+                User_listModel.level_exp: 0,
+                User_listModel.bonus_exp: 0,
+                User_listModel.last_visit: fn.now(),
+                User_listModel.rank: 1
+            }).execute()
+            user = User_listModel.get(User_listModel.user_id == user_id)
+        
+        # Получаем текущий уровень до начисления опыта
+        current_exp = user.level_exp + user.bonus_exp
+        current_level = calculate_level(current_exp)
+        
+        # Рассчитываем новый уровень после начисления опыта
+        new_exp = current_exp + exp_amount
+        new_level = calculate_level(new_exp)
+        
+        # Если уровень повысится и есть объект сообщения
+        if new_level > current_level and message is not None:
+            new_rank = get_user_rank(new_level)
+            level_up_message = (
+                f"🎉 <b>Поздравляем, {username}!</b>\n\n"
+                f"🎯 Вы достигли <b>{new_level}-го уровня</b>!\n"
+                f"🏆 Новое звание: <b>{new_rank}</b>\n"
+                f"⭐ Опыт: <b>{new_exp}</b>\n\n"
+                f"Продолжайте быть активными! 🚀"
+            )
+            await message.reply(level_up_message, parse_mode="HTML")
+        
+        # Начисляем опыт и обновляем уровень
+        if exp_type == 'level':
+            User_listModel.update({
+                User_listModel.level_exp: User_listModel.level_exp + exp_amount,
+                User_listModel.rank: new_level
+            }).where(User_listModel.user_id == user_id).execute()
+        elif exp_type == 'bonus':
+            User_listModel.update({
+                User_listModel.bonus_exp: User_listModel.bonus_exp + exp_amount,
+                User_listModel.rank: new_level
+            }).where(User_listModel.user_id == user_id).execute()
+            
+    except Exception as e:
+        logger.error(f"Ошибка при начислении опыта для user_id {user_id}: {e}")
 
 
 

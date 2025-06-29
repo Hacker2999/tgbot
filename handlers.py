@@ -15,7 +15,7 @@ from peewee import fn, DatabaseError
 
 from baneks_api import fetch_random_joke
 from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel
-from utils import quota_check, calculate_level, calculate_exp_for_level, calculate_messages_for_level, get_user_rank, check_visit_streak, is_admin
+from utils import quota_check, calculate_level, calculate_exp_for_level, calculate_messages_for_level, get_user_rank, check_visit_streak, is_admin, award_exp_and_check_level_up
 from config import RULES, API_TOKEN, SPAM_LIMIT, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, KILL_CHAT_PASSWORD
 
 router = Router()
@@ -722,11 +722,9 @@ async def roulette(message: Message, bot: Bot) -> None:
                     User_listModel.rank: 1,  # Начальный уровень
                 }).execute()
             else:
-                User_listModel.update({User_listModel.bonus_exp: User_listModel.bonus_exp + bonus_exp}).where(User_listModel.user_id == message.from_user.id).execute()
+                username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
+                await award_exp_and_check_level_up(message.from_user.id, bonus_exp, 'bonus', username, message, bot)
             await message.reply(f"Победа за вами! 🎉\nВы получаете <b>{bonus_exp}</b> бонусного опыта за игру в рулетку.", parse_mode="HTML")
-            # Проверяем повышение уровня после награды за рулетку
-            username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
-            await check_level_up(message.from_user.id, username, message)
         else:
             # Мутим пользователя
             until_date = datetime.now() + timedelta(minutes=mute_minutes)
@@ -1118,77 +1116,27 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
             username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
             # Начисляем опыт за винстрик
             streak_exp = 10 * streak
-            User_listModel.update({
-                User_listModel.level_exp: User_listModel.level_exp + streak_exp
-            }).where(User_listModel.user_id == user_id).execute()
+            await award_exp_and_check_level_up(user_id, streak_exp, 'level', username, message, bot)
+            
             await message.reply(
                 f"🎉 <b>{username}</b>, в чате {streak}-й день подряд!\nВы получаете <b>{streak_exp}</b> опыта за активность!",
                 parse_mode="HTML"
             )
-            # Проверяем повышение уровня после винстрика
-            await check_level_up(user_id, username, message)
 
         # Проверяем шанс получения бонусного опыта (1%)
         if random.random() < 0.01:
             bonus_exp = random.randint(10, 100)
-            User_listModel.update({
-                User_listModel.bonus_exp: User_listModel.bonus_exp + bonus_exp
-            }).where(User_listModel.user_id == user_id).execute()
             username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
+            await award_exp_and_check_level_up(user_id, bonus_exp, 'bonus', username, message, bot)
+            
             await message.reply(
                 f"🎲 <b>{username}</b> получает <b>{bonus_exp}</b> бонусного опыта за активность!",
                 parse_mode="HTML"
             )
-            # Проверяем повышение уровня после бонусного опыта
-            await check_level_up(user_id, username, message)
 
         # Начисляем опыт за сообщение
-        User_listModel.update({
-            User_listModel.level_exp: User_listModel.level_exp + 1
-        }).where(User_listModel.user_id == user_id).execute()
-        
-        # Проверяем повышение уровня после базового опыта
         username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
-        await check_level_up(user_id, username, message)
+        await award_exp_and_check_level_up(user_id, 1, 'level', username, message, bot)
         
     except Exception as e:
         logger.error(f"Ошибка в handle_all_messages для user_id {message.from_user.id}: {e}")
-
-async def check_level_up(user_id: int, username: str, message: Message) -> None:
-    """
-    Проверяет повышение уровня пользователя и отправляет уведомление.
-    
-    Args:
-        user_id (int): ID пользователя
-        username (str): Имя пользователя
-        message (Message): Сообщение для ответа
-    """
-    try:
-        user_record = User_listModel.get(User_listModel.user_id == user_id)
-        total_exp = user_record.level_exp + user_record.bonus_exp
-        current_level = calculate_level(total_exp)
-        
-        # Сравниваем с сохраненным уровнем в БД
-        saved_level = user_record.rank
-        
-        # Если уровень повысился
-        if current_level > saved_level:
-            new_rank = get_user_rank(current_level)
-            
-            # Обновляем уровень в БД
-            User_listModel.update({
-                User_listModel.rank: current_level
-            }).where(User_listModel.user_id == user_id).execute()
-            
-            # Формируем сообщение о повышении уровня
-            level_up_message = (
-                f"🎉 <b>Поздравляем, {username}!</b>\n\n"
-                f"🎯 Вы достигли <b>{current_level}-го уровня</b>!\n"
-                f"🏆 Новое звание: <b>{new_rank}</b>\n"
-                f"⭐ Опыт: <b>{total_exp}</b>\n\n"
-                f"Продолжайте быть активными! 🚀"
-            )
-            
-            await message.reply(level_up_message, parse_mode="HTML")
-    except Exception as e:
-        logger.error(f"Ошибка при проверке повышения уровня для user_id {user_id}: {e}")
