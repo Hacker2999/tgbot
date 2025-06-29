@@ -28,6 +28,9 @@ CAPTCHA_ANSWERS = ["Я не бот", "Я бот", "12345"]
 MAX_MUTE_MINUTES = 1440  # 24 часа
 MIN_MUTE_MINUTES = 1
 
+# --- Поддерживаемые emoji для send_dice ---
+SUPPORTED_DICE_EMOJI = {"🎲", "🎯", "🏀", "⚽", "🎰", "🎳"}
+
 # --- Вспомогательные функции ---
 
 @lru_cache(maxsize=1000)
@@ -1321,27 +1324,32 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
             except Exception:
                 pass
         
-        # Для слотов не отправляем стикер, сразу играем
+        # Для слотов и блэкджека не отправляем стикер, сразу играем
         if game_type == "slot":
             result = await burmalda_game.play_slot_game(user_id)
-        else:
-            # Отправляем стикер
-            sticker_emoji = {
-                "roulette": "🎲",
-                "slot": "🎰",
-                "blackjack": "🃏"
-            }.get(game_type, "🎮")
-            sticker_msg = await bot.send_dice(
-                chat_id=call.message.chat.id,
-                emoji=sticker_emoji
-            )
-            if game_type == "roulette":
-                result = await burmalda_game.play_roulette_game(user_id, sticker_msg.dice.value)
-            elif game_type == "blackjack":
-                result = await burmalda_game.play_blackjack_game(user_id)
+        elif game_type == "blackjack":
+            result = await burmalda_game.play_blackjack_game(user_id)
+        elif game_type == "roulette":
+            sticker_emoji = "🎲"
+            if sticker_emoji not in SUPPORTED_DICE_EMOJI:
+                # Fallback: emoji не поддерживается
+                result = await burmalda_game.play_roulette_game(user_id)
+                sticker_msg = None
             else:
-                await call.answer("❌ Неизвестная игра", show_alert=True)
-                return
+                try:
+                    sticker_msg = await bot.send_dice(
+                        chat_id=call.message.chat.id,
+                        emoji=sticker_emoji
+                    )
+                    result = await burmalda_game.play_roulette_game(user_id, sticker_msg.dice.value)
+                except Exception as e:
+                    # Fallback: ошибка Telegram API
+                    logger.error(f"Ошибка send_dice: {e}")
+                    result = await burmalda_game.play_roulette_game(user_id)
+                    sticker_msg = None
+        else:
+            await call.answer("❌ Неизвестная игра", show_alert=True)
+            return
         
         # Увеличиваем счетчик побед
         if result.won:
@@ -1363,7 +1371,7 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
         )
         
         # Сохраняем ID сообщений
-        if game_type != "slot":
+        if game_type == "roulette" and 'sticker_msg' in locals() and sticker_msg is not None:
             game_state["messages"].append(sticker_msg.message_id)
         game_state["messages"].append(new_message.message_id)
         
@@ -1373,7 +1381,6 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
         logger.error(f"Ошибка в start_burmalda_game: {e}")
         await call.answer("❌ Ошибка в игре", show_alert=True)
 
-@router.callback_query(F.data.startswith("burmalda_finish_"))
 async def finish_burmalda_game(call: CallbackQuery, bot: Bot) -> None:
     """Завершает игру в Burmalda и начисляет награды"""
     try:
@@ -1437,8 +1444,11 @@ async def finish_burmalda_game(call: CallbackQuery, bot: Bot) -> None:
             parse_mode="HTML"
         )
         
-        # Очищаем состояние игры
-        del burmalda_game.active_games[user_id]
+        # Очищаем состояние игры (явно)
+        if user_id in burmalda_game.active_games:
+            del burmalda_game.active_games[user_id]
+        # Fallback: если где-то ещё есть состояния, сбросить их (расширяем при необходимости)
+        # Например, если есть другие dict-ы сессий: burmalda_game.some_other_state.pop(user_id, None)
         
         await call.answer()
         
