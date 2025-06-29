@@ -87,8 +87,10 @@ def calculate_level(exp: int) -> int:
         int: Уровень пользователя (1-20)
     """
     if exp < BASE_EXP:
+        logger.info(f"DEBUG: calculate_level({exp}) = 1 (меньше BASE_EXP={BASE_EXP})")
         return 1
     if exp >= MAX_EXP:
+        logger.info(f"DEBUG: calculate_level({exp}) = {MAX_LEVEL} (больше или равно MAX_EXP={MAX_EXP})")
         return MAX_LEVEL
         
     try:
@@ -99,7 +101,9 @@ def calculate_level(exp: int) -> int:
         discriminant = b**2 - 4*a*c
         level = int((-b + (discriminant)**0.5) / (2*a))
         
-        return min(max(level, 1), MAX_LEVEL)
+        result = min(max(level, 1), MAX_LEVEL)
+        logger.info(f"DEBUG: calculate_level({exp}) = {result} (a={a}, b={b}, c={c}, discriminant={discriminant})")
+        return result
     except Exception as e:
         logger.error(f"Ошибка в calculate_level для exp {exp}: {e}")
         return 1
@@ -402,9 +406,13 @@ async def award_exp_and_check_level_up(user_id: int, level_exp_amount: int, bonu
         bot: Экземпляр бота (может быть None)
     """
     try:
+        logger.info(f"DEBUG: Начинаем начисление опыта для user_id {user_id}")
+        logger.info(f"DEBUG: level_exp_amount = {level_exp_amount}, bonus_exp_amount = {bonus_exp_amount}")
+        
         # Получаем текущие данные пользователя
         user = User_listModel.get_or_none(User_listModel.user_id == user_id)
         if not user:
+            logger.info(f"DEBUG: Пользователь {user_id} не найден, создаем нового")
             # Создаем пользователя если его нет
             User_listModel.insert({
                 User_listModel.created_at: fn.now(),
@@ -417,35 +425,57 @@ async def award_exp_and_check_level_up(user_id: int, level_exp_amount: int, bonu
             user = User_listModel.get(User_listModel.user_id == user_id)
         
         # Получаем текущий уровень до начисления опыта
-        current_exp = user.level_exp + user.bonus_exp
-        current_level = calculate_level(current_exp)
+        current_level_exp = user.level_exp
+        current_bonus_exp = user.bonus_exp
+        current_total_exp = current_level_exp + current_bonus_exp
+        current_level = calculate_level(current_total_exp)
+        current_rank = user.rank
+        
+        logger.info(f"DEBUG: Текущие данные пользователя {user_id}:")
+        logger.info(f"DEBUG: level_exp = {current_level_exp}, bonus_exp = {current_bonus_exp}")
+        logger.info(f"DEBUG: total_exp = {current_total_exp}, current_level = {current_level}, rank = {current_rank}")
         
         # Рассчитываем новый уровень после начисления опыта
         total_exp_to_award = level_exp_amount + bonus_exp_amount
-        new_exp = current_exp + total_exp_to_award
-        new_level = calculate_level(new_exp)
+        new_total_exp = current_total_exp + total_exp_to_award
+        new_level = calculate_level(new_total_exp)
+        
+        logger.info(f"DEBUG: После начисления опыта:")
+        logger.info(f"DEBUG: total_exp_to_award = {total_exp_to_award}")
+        logger.info(f"DEBUG: new_total_exp = {new_total_exp}, new_level = {new_level}")
+        logger.info(f"DEBUG: Сравнение: current_rank = {current_rank}, new_level = {new_level}")
         
         # Если уровень повысится и есть объект сообщения
-        if new_level > current_level and message is not None:
+        if new_level > current_rank and message is not None:
+            logger.info(f"DEBUG: Уровень повысился! Отправляем уведомление")
             new_rank = get_user_rank(new_level)
             level_up_message = (
                 f"🎉 <b>Поздравляем, {username}!</b>\n\n"
                 f"🎯 Вы достигли <b>{new_level}-го уровня</b>!\n"
                 f"🏆 Новое звание: <b>{new_rank}</b>\n"
-                f"⭐ Опыт: <b>{new_exp}</b>\n\n"
+                f"⭐ Опыт: <b>{new_total_exp}</b>\n\n"
                 f"Продолжайте быть активными! 🚀"
             )
             await message.reply(level_up_message, parse_mode="HTML")
+            logger.info(f"DEBUG: Уведомление о повышении уровня отправлено")
+        elif new_level > current_rank:
+            logger.info(f"DEBUG: Уровень повысился, но нет объекта сообщения для уведомления")
+        else:
+            logger.info(f"DEBUG: Уровень не повысился")
         
         # Начисляем опыт и обновляем уровень
+        logger.info(f"DEBUG: Обновляем данные в БД: level_exp += {level_exp_amount}, bonus_exp += {bonus_exp_amount}, rank = {new_level}")
         User_listModel.update({
             User_listModel.level_exp: User_listModel.level_exp + level_exp_amount,
             User_listModel.bonus_exp: User_listModel.bonus_exp + bonus_exp_amount,
             User_listModel.rank: new_level
         }).where(User_listModel.user_id == user_id).execute()
+        
+        logger.info(f"DEBUG: Данные пользователя {user_id} успешно обновлены")
             
     except Exception as e:
         logger.error(f"Ошибка при начислении опыта для user_id {user_id}: {e}")
+        logger.error(f"DEBUG: Детали ошибки: {str(e)}")
 
 
 
