@@ -54,6 +54,10 @@ class User_listModel(BaseModel):
     last_visit = TimestampField(null=True)  # Дата последнего посещения
     visit_streak = BigIntegerField(default=0)  # Текущий винстрик посещений
     rank = BigIntegerField(null=False,default=1)  # Текущий уровень
+    # Новые поля для системы Burmalda
+    credits = BigIntegerField(default=0)  # Кредиты "отвальчики"
+    points = BigIntegerField(default=0)  # Очки для магазина
+    last_credits_date = DateField(null=True)  # Дата последней выдачи кредитов
 
     class Meta:
         table_name = 'user_list'
@@ -82,3 +86,14 @@ class SizeModel(BaseModel):
 
     class Meta:
         table_name = 'size_list'
+
+class CreditsHistoryModel(BaseModel):
+    """История выдачи кредитов для отслеживания ежедневных начислений"""
+    id = BigAutoField(primary_key=True)
+    user_id = BigIntegerField(null=False)
+    credits_amount = BigIntegerField(null=False)  # Количество выданных кредитов
+    issued_date = DateField(null=False)  # Дата выдачи
+    created_at = TimestampField(constraints=[SQL('DEFAULT now()')])
+
+    class Meta:
+        table_name = 'credits_history'

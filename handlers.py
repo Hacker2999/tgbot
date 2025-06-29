@@ -17,6 +17,7 @@ from baneks_api import fetch_random_joke
 from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel
 from utils import quota_check, calculate_level, calculate_exp_for_level, calculate_messages_for_level, get_user_rank, check_visit_streak, is_admin, award_exp_and_check_level_up
 from config import RULES, API_TOKEN, SPAM_LIMIT, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, KILL_CHAT_PASSWORD
+from burmalda import burmalda_game, GAME_COST, ATTEMPT_REWARDS, WARN_REMOVAL_COST
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -720,6 +721,8 @@ async def roulette(message: Message, bot: Bot) -> None:
                     User_listModel.bonus_exp: bonus_exp,
                     User_listModel.last_visit: fn.now(),
                     User_listModel.rank: 1,  # Начальный уровень
+                    User_listModel.credits: 0,  # Начальные кредиты
+                    User_listModel.points: 0,  # Начальные очки
                 }).execute()
             else:
                 username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
@@ -755,6 +758,7 @@ async def help_command(message: Message) -> None:
         "<b>🤖 Добро пожаловать! Вот что я умею:</b>\n\n"
         "<b>👤 Пользовательские команды:</b>\n"
         "<b>/stat</b> — Ваша статистика в чате: сколько сообщений, сколько вы с нами\n"
+        "<b>/burmalda</b> — 🎮 <i>Игровая система с кредитами и магазином!</i>\n"
         "<b>/size</b> — Узнай размер своего бубуя (рандом + никнейм)\n"
         "<b>/size_top</b> — Турнирная таблица размеров за сегодня\n"
         "<b>/anekdot</b> — Получить свежий анекдот (лимит: 3 в день)\n"
@@ -772,6 +776,13 @@ async def help_command(message: Message) -> None:
         "<b>/add_rules</b> — Добавить или обновить правила чата (ответом на сообщение с текстом)\n"
         "<b>/m</b> — Мут пользователя (ответом на сообщение, можно указать срок: <code>/m 10m</code>)\n"
         "<b>/b</b> — Бан пользователя (ответом на сообщение, можно указать срок: <code>/b 1d</code>)\n"
+        "\n"
+        "<b>🎮 Burmalda - Игровая система:</b>\n"
+        "• Ежедневно получайте 100 кредитов\n"
+        "• Играйте в рулетку, кости, слоты и блэкджек за 30 кредитов\n"
+        "• Блэкджек - одна попытка, остальные игры - 3 попытки\n"
+        "• Зарабатывайте очки и покупайте товары в магазине\n"
+        "• Снимайте предупреждения или обменивайте очки на опыт\n"
         "\n"
         "<b>ℹ️ Примечания:</b>\n"
         "• <b>Мут</b> — временно запрещает писать сообщения.\n"
@@ -1092,6 +1103,8 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
                 User_listModel.message_count: 1,
                 User_listModel.last_visit: fn.now(),
                 User_listModel.rank: 1,  # Начальный уровень
+                User_listModel.credits: 0,  # Начальные кредиты
+                User_listModel.points: 0,  # Начальные очки
             })
             .on_conflict(
                 conflict_target=[User_listModel.user_id],
@@ -1149,3 +1162,317 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
 
     except Exception as e:
         logger.error(f"Ошибка в handle_all_messages для user_id {message.from_user.id}: {e}")
+
+# --- Burmalda система ---
+
+@router.message(Command("burmalda"))
+async def burmalda_command(message: Message, bot: Bot) -> None:
+    """Главная команда для доступа к игровой системе Burmalda"""
+    try:
+        # Отсеиваем привязанный канал и сообщения бота
+        if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+            await message.reply("Команды нельзя использовать от имени канала.")
+            return
+            
+        user_id = message.from_user.id
+        username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
+        
+        # Проверяем и выдаем ежедневные кредиты
+        daily_credits = await burmalda_game.check_and_give_daily_credits(user_id)
+        
+        # Создаем главное меню
+        text, markup = burmalda_game.create_main_menu(user_id)
+        
+        # Добавляем информацию о ежедневных кредитах
+        if daily_credits > 0:
+            text += f"\n\n🎁 <b>Получено {daily_credits} ежедневных кредитов!</b>"
+        
+        await message.reply(text, reply_markup=markup, parse_mode="HTML")
+        
+    except Exception as e:
+        logger.error(f"Ошибка в команде burmalda для user_id {message.from_user.id}: {e}")
+        await message.reply("❌ Произошла ошибка при открытии игровой системы.")
+
+@router.callback_query(F.data.startswith("burmalda_"))
+async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
+    """Обработчик всех callback'ов системы Burmalda"""
+    try:
+        data = call.data.split("_")
+        if len(data) < 3:
+            await call.answer("❌ Неверный формат данных")
+            return
+            
+        action = data[1]
+        user_id = int(data[2])
+        
+        # Проверяем, что callback отправил тот же пользователь
+        if call.from_user.id != user_id:
+            await call.answer("❌ Это не ваше меню!", show_alert=True)
+            return
+            
+        if action == "main":
+            # Главное меню
+            text, markup = burmalda_game.create_main_menu(user_id)
+            await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+            
+        elif action == "shop":
+            # Магазин
+            text, markup = burmalda_game.create_shop_menu(user_id)
+            await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+            
+        elif action == "stats":
+            # Статистика
+            user = User_listModel.get_or_none(User_listModel.user_id == user_id)
+            if not user:
+                await call.answer("❌ Пользователь не найден", show_alert=True)
+                return
+                
+            credits = burmalda_game.get_user_credits(user_id)
+            points = burmalda_game.get_user_points(user_id)
+            level = user.rank
+            rank_name = get_user_rank(level)
+            
+            text = (
+                f"📊 <b>Статистика Burmalda</b>\n\n"
+                f"👤 Пользователь: <b>{call.from_user.first_name}</b>\n"
+                f"💰 Кредиты: <b>{credits}</b>\n"
+                f"🏆 Очки: <b>{points}</b>\n"
+                f"📈 Уровень: <b>{level}</b>\n"
+                f"🏅 Звание: <b>{rank_name}</b>\n"
+                f"⚠️ Предупреждения: <b>{user.warn_count}</b>\n"
+                f"💬 Сообщений: <b>{user.message_count}</b>"
+            )
+            
+            builder = InlineKeyboardBuilder()
+            builder.button(text="🔙 Назад", callback_data=f"burmalda_main_{user_id}")
+            await call.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+            
+        elif action == "game":
+            # Игра
+            if len(data) < 4:
+                await call.answer("❌ Неверный формат данных игры")
+                return
+                
+            game_type = data[3]
+            
+            # Проверяем кредиты
+            credits = burmalda_game.get_user_credits(user_id)
+            if credits < GAME_COST:
+                await call.answer(f"❌ Недостаточно кредитов! Нужно: {GAME_COST}, у вас: {credits}", show_alert=True)
+                return
+                
+            # Тратим кредиты
+            if not burmalda_game.spend_credits(user_id, GAME_COST):
+                await call.answer("❌ Ошибка при списании кредитов", show_alert=True)
+                return
+                
+            # Инициализируем игру
+            burmalda_game.active_games[user_id] = {
+                "game_type": game_type,
+                "attempts": 0,
+                "wins": 0,
+                "messages": []
+            }
+            
+            # Начинаем игру
+            await start_burmalda_game(call, bot, user_id, game_type)
+            
+        elif action == "remove":
+            # Снятие предупреждения
+            if len(data) < 4 or data[3] != "warn":
+                await call.answer("❌ Неверный формат данных")
+                return
+                
+            user = User_listModel.get_or_none(User_listModel.user_id == user_id)
+            if not user or user.warn_count == 0:
+                await call.answer("❌ У вас нет предупреждений для снятия", show_alert=True)
+                return
+                
+            points = burmalda_game.get_user_points(user_id)
+            if points < WARN_REMOVAL_COST:
+                await call.answer(f"❌ Недостаточно очков! Нужно: {WARN_REMOVAL_COST}, у вас: {points}", show_alert=True)
+                return
+                
+            # Снимаем предупреждение и тратим очки
+            User_listModel.update({
+                User_listModel.warn_count: User_listModel.warn_count - 1
+            }).where(User_listModel.user_id == user_id).execute()
+            
+            burmalda_game.spend_points(user_id, WARN_REMOVAL_COST)
+            
+            await call.answer(f"✅ Предупреждение снято! Потрачено {WARN_REMOVAL_COST} очков", show_alert=True)
+            
+            # Обновляем меню магазина
+            text, markup = burmalda_game.create_shop_menu(user_id)
+            await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+            
+        elif action == "exchange":
+            # Обмен очков на опыт
+            if len(data) < 4 or data[3] != "exp":
+                await call.answer("❌ Неверный формат данных")
+                return
+                
+            user = User_listModel.get_or_none(User_listModel.user_id == user_id)
+            if not user:
+                await call.answer("❌ Пользователь не найден", show_alert=True)
+                return
+                
+            points = burmalda_game.get_user_points(user_id)
+            if points < 100:
+                await call.answer(f"❌ Недостаточно очков! Нужно: 100, у вас: {points}", show_alert=True)
+                return
+                
+            # Рассчитываем опыт с учетом комиссии
+            commission = burmalda_game.get_commission_rate(user.rank)
+            exp_gained = int(100 * (1 - commission))
+            
+            # Тратим очки и начисляем опыт
+            burmalda_game.spend_points(user_id, 100)
+            await award_exp_and_check_level_up(user_id, exp_gained, 0, call.from_user.first_name, call.message, bot)
+            
+            await call.answer(f"✅ Получено {exp_gained} опыта! Комиссия: {commission*100:.0f}%", show_alert=True)
+            
+            # Обновляем меню магазина
+            text, markup = burmalda_game.create_shop_menu(user_id)
+            await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+            
+        else:
+            await call.answer("❌ Неизвестное действие")
+            
+    except Exception as e:
+        logger.error(f"Ошибка в burmalda_callback: {e}")
+        await call.answer("❌ Произошла ошибка", show_alert=True)
+
+async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_type: str) -> None:
+    """Начинает игру в Burmalda"""
+    try:
+        game_state = burmalda_game.active_games.get(user_id)
+        if not game_state:
+            await call.answer("❌ Игра не найдена", show_alert=True)
+            return
+            
+        # Увеличиваем счетчик попыток
+        game_state["attempts"] += 1
+        
+        # Играем в выбранную игру
+        if game_type == "roulette":
+            result = await burmalda_game.play_roulette_game(user_id)
+        elif game_type == "dice":
+            result = await burmalda_game.play_dice_game(user_id)
+        elif game_type == "slot":
+            result = await burmalda_game.play_slot_game(user_id)
+        elif game_type == "blackjack":
+            result = await burmalda_game.play_blackjack_game(user_id)
+        else:
+            await call.answer("❌ Неизвестная игра", show_alert=True)
+            return
+            
+        # Увеличиваем счетчик побед
+        if result.won:
+            game_state["wins"] += 1
+            
+        # Создаем кнопки для продолжения
+        builder = InlineKeyboardBuilder()
+        if game_state["attempts"] < 3 and game_type != "blackjack":
+            builder.button(text="🎲 Следующая попытка", callback_data=f"burmalda_game_{game_type}_{user_id}")
+        builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
+        builder.adjust(1)
+        
+        # Отправляем результат
+        result_text = (
+            f"{result.message}\n\n"
+            f"📊 Попытка: {game_state['attempts']}/3\n"
+            f"🎯 Победы: {game_state['wins']}/3"
+        )
+        
+        # Удаляем предыдущее сообщение если есть
+        if game_state["messages"]:
+            try:
+                await bot.delete_message(call.message.chat.id, game_state["messages"][-1])
+            except Exception:
+                pass
+                
+        # Отправляем новое сообщение
+        new_message = await bot.send_message(
+            chat_id=call.message.chat.id,
+            text=result_text,
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML"
+        )
+        
+        # Сохраняем ID сообщения
+        game_state["messages"].append(new_message.message_id)
+        
+        await call.answer()
+        
+    except Exception as e:
+        logger.error(f"Ошибка в start_burmalda_game: {e}")
+        await call.answer("❌ Ошибка в игре", show_alert=True)
+
+@router.callback_query(F.data.startswith("burmalda_finish_"))
+async def finish_burmalda_game(call: CallbackQuery, bot: Bot) -> None:
+    """Завершает игру в Burmalda и начисляет награды"""
+    try:
+        user_id = int(call.data.split("_")[2])
+        
+        # Проверяем, что callback отправил тот же пользователь
+        if call.from_user.id != user_id:
+            await call.answer("❌ Это не ваша игра!", show_alert=True)
+            return
+            
+        game_state = burmalda_game.active_games.get(user_id)
+        if not game_state:
+            await call.answer("❌ Игра не найдена", show_alert=True)
+            return
+            
+        wins = game_state["wins"]
+        points_earned = ATTEMPT_REWARDS.get(wins, 0)
+        
+        # Начисляем очки
+        if points_earned > 0:
+            burmalda_game.add_points(user_id, points_earned)
+        
+        # Формируем итоговое сообщение
+        if wins == 0:
+            result_text = "😔 К сожалению, вы не выиграли ни одной попытки..."
+        elif wins == 1:
+            result_text = f"🎉 Хорошо! Вы выиграли 1 попытку и получаете {points_earned} очков!"
+        elif wins == 2:
+            result_text = f"🎊 Отлично! Вы выиграли 2 попытки и получаете {points_earned} очков!"
+        else:
+            result_text = f"🏆 Превосходно! Вы выиграли все 3 попытки и получаете {points_earned} очков!"
+            
+        # Удаляем все сообщения игры
+        for msg_id in game_state["messages"]:
+            try:
+                await bot.delete_message(call.message.chat.id, msg_id)
+            except Exception:
+                pass
+                
+        # Удаляем текущее сообщение
+        try:
+            await call.message.delete()
+        except Exception:
+            pass
+            
+        # Отправляем итоговое сообщение
+        builder = InlineKeyboardBuilder()
+        builder.button(text="🎮 Играть снова", callback_data=f"burmalda_main_{user_id}")
+        builder.button(text="🏪 Магазин", callback_data=f"burmalda_shop_{user_id}")
+        builder.adjust(1)
+        
+        await bot.send_message(
+            chat_id=call.message.chat.id,
+            text=result_text,
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML"
+        )
+        
+        # Очищаем состояние игры
+        del burmalda_game.active_games[user_id]
+        
+        await call.answer()
+        
+    except Exception as e:
+        logger.error(f"Ошибка в finish_burmalda_game: {e}")
+        await call.answer("❌ Ошибка при завершении игры", show_alert=True)
