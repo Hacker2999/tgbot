@@ -1083,91 +1083,7 @@ async def admin_ban(message: Message, bot: Bot) -> None:
         logger.error(f"Ошибка в admin_ban: {e}")
         await message.reply("Ошибка при бане пользователя.")
 
-# --- Обработчики событий ---
 
-@router.message()
-async def handle_all_messages(message: Message, bot: Bot) -> None:
-    """
-    Обработчик всех сообщений для обновления статистики пользователей.
-    Обновляет last_visit, message_count и начисляет опыт.
-    """
-    try:
-        # Пропускаем сообщения от ботов и каналов
-        if message.from_user and message.from_user.is_bot:
-            return
-        if message.chat.type == "channel":
-            return
-            
-        user_id = message.from_user.id
-        
-        # Обновляем/создаем запись пользователя
-        (
-            User_listModel
-            .insert({
-                User_listModel.created_at: fn.now(),
-                User_listModel.user_id: user_id,
-                User_listModel.message_count: 1,
-                User_listModel.last_visit: fn.now(),
-                User_listModel.rank: 1,  # Начальный уровень
-                User_listModel.credits: 0,  # Начальные кредиты
-                User_listModel.points: 0,  # Начальные очки
-            })
-            .on_conflict(
-                conflict_target=[User_listModel.user_id],
-                update={
-                    User_listModel.message_count: User_listModel.message_count + 1,
-                    User_listModel.last_visit: fn.now()
-                }
-            )
-        ).execute()
-        
-        # Фильтруем команды
-        if message.text and message.text.startswith("/"):
-            try:
-                await message.delete()
-            except Exception as e:
-                logger.error(f"Не удалось удалить команду в чате {message.chat.id}: {e}")
-            return
-            
-        username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
-        total_exp_to_award = 0
-        level_exp_to_award = 0
-        bonus_exp_to_award = 0
-            
-        # Проверяем винстрик
-        is_new_day, streak = check_visit_streak(user_id)
-        if is_new_day and streak > 1:
-            # Начисляем опыт за винстрик
-            streak_exp = 10 * streak
-            level_exp_to_award += streak_exp
-            total_exp_to_award += streak_exp
-            
-            await message.reply(
-                f"🎉 <b>{username}</b>, в чате {streak}-й день подряд!\nВы получаете <b>{streak_exp}</b> опыта за активность!",
-                parse_mode="HTML"
-            )
-
-        # Проверяем шанс получения бонусного опыта (1%)
-        if random.random() < 0.01:
-            bonus_exp = random.randint(10, 100)
-            bonus_exp_to_award += bonus_exp
-            total_exp_to_award += bonus_exp
-            
-            await message.reply(
-                f"🎲 <b>{username}</b> получает <b>{bonus_exp}</b> бонусного опыта за активность!",
-                parse_mode="HTML"
-            )
-
-        # Начисляем опыт за сообщение
-        level_exp_to_award += 1
-        total_exp_to_award += 1
-        
-        # Начисляем весь накопленный опыт и проверяем повышение уровня
-        if total_exp_to_award > 0:
-            await award_exp_and_check_level_up(user_id, level_exp_to_award, bonus_exp_to_award, username, message, bot)
-
-    except Exception as e:
-        logger.error(f"Ошибка в handle_all_messages для user_id {message.from_user.id}: {e}")
 
 # --- Burmalda система ---
 
@@ -1363,8 +1279,6 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             text, markup = burmalda_game.create_shop_menu(user_id)
             await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
             
-        elif action == "finish":
-            return
         else:
             await call.answer("❌ Неизвестное действие")
             
@@ -1391,60 +1305,70 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
         builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
         builder.adjust(1)
         
+        # Далее ветвление по типу игры...
         # Удаляем предыдущие сообщения если есть (стикер и результат)
         if len(game_state["messages"]) >= 2:
             try:
+                # Удаляем последние 2 сообщения (стикер и результат)
                 await bot.delete_message(call.message.chat.id, game_state["messages"][-2])
                 await bot.delete_message(call.message.chat.id, game_state["messages"][-1])
+                # Убираем их из списка
                 game_state["messages"] = game_state["messages"][:-2]
             except Exception:
                 pass
+                
+        # Отправляем интерактивный стикер в зависимости от игры
+        sticker_emoji = {
+            "roulette": "🎲",
+            "dice": "🎯",
+            "slot": "🎰",
+            "blackjack": "🃏"
+        }.get(game_type, "🎮")
         
-        # --- Логика по типу игры ---
-        if game_type in ("roulette", "dice"):
-            # Только для этих игр отправляем стикер и используем его значение
-            sticker_emoji = {
-                "roulette": "🎲",
-                "dice": "🎯"
-            }[game_type]
-            sticker_msg = await bot.send_dice(
-                chat_id=call.message.chat.id,
-                emoji=sticker_emoji
-            )
-            if game_type == "roulette":
-                result = await burmalda_game.play_roulette_game(user_id, sticker_msg.dice.value)
-            else:
-                result = await burmalda_game.play_dice_game(user_id, sticker_msg.dice.value)
-            game_state["messages"].append(sticker_msg.message_id)
+        # Отправляем стикер
+        sticker_msg = await bot.send_dice(
+            chat_id=call.message.chat.id,
+            emoji=sticker_emoji
+        )
+        
+        # Играем в выбранную игру с использованием значения из стикера
+        if game_type == "roulette":
+            result = await burmalda_game.play_roulette_game(user_id, sticker_msg.dice.value)
+        elif game_type == "dice":
+            result = await burmalda_game.play_dice_game(user_id, sticker_msg.dice.value)
         elif game_type == "slot":
-            # Для слотов только своё сообщение
-            import random
-            slot_values = [random.randint(1, 6) for _ in range(3)]
-            result = await burmalda_game.play_slot_game(user_id, slot_values)
+            result = await burmalda_game.play_slot_game(user_id, sticker_msg.dice.value)
         elif game_type == "blackjack":
-            # Для блэкджека только своё сообщение
             result = await burmalda_game.play_blackjack_game(user_id)
         else:
             await call.answer("❌ Неизвестная игра", show_alert=True)
             return
-        
+            
         # Увеличиваем счетчик побед
         if result.won:
             game_state["wins"] += 1
+            
+        # Отправляем результат
+        result_text = (
+            f"{result.message}\n\n"
+            f"📊 Попытка: {game_state['attempts']}/3\n"
+            f"🎯 Победы: {game_state['wins']}/3"
+        )
         
         # Отправляем новое сообщение с результатом
         new_message = await bot.send_message(
             chat_id=call.message.chat.id,
-            text=(
-                f"{result.message}\n\n"
-                f"📊 Попытка: {game_state['attempts']}/3\n"
-                f"🎯 Победы: {game_state['wins']}/3"
-            ),
+            text=result_text,
             reply_markup=builder.as_markup(),
             parse_mode="HTML"
         )
+        
+        # Сохраняем ID сообщений
+        game_state["messages"].append(sticker_msg.message_id)
         game_state["messages"].append(new_message.message_id)
+        
         await call.answer()
+        
     except Exception as e:
         logger.error(f"Ошибка в start_burmalda_game: {e}")
         await call.answer("❌ Ошибка в игре", show_alert=True)
@@ -1521,3 +1445,90 @@ async def finish_burmalda_game(call: CallbackQuery, bot: Bot) -> None:
     except Exception as e:
         logger.error(f"Ошибка в finish_burmalda_game: {e}")
         await call.answer("❌ Ошибка при завершении игры", show_alert=True)
+
+
+# --- Обработчики событий ---
+
+@router.message()
+async def handle_all_messages(message: Message, bot: Bot) -> None:
+    """
+    Обработчик всех сообщений для обновления статистики пользователей.
+    Обновляет last_visit, message_count и начисляет опыт.
+    """
+    try:
+        # Пропускаем сообщения от ботов и каналов
+        if message.from_user and message.from_user.is_bot:
+            return
+        if message.chat.type == "channel":
+            return
+
+        user_id = message.from_user.id
+
+        # Обновляем/создаем запись пользователя
+        (
+            User_listModel
+            .insert({
+                User_listModel.created_at: fn.now(),
+                User_listModel.user_id: user_id,
+                User_listModel.message_count: 1,
+                User_listModel.last_visit: fn.now(),
+                User_listModel.rank: 1,  # Начальный уровень
+                User_listModel.credits: 0,  # Начальные кредиты
+                User_listModel.points: 0,  # Начальные очки
+            })
+            .on_conflict(
+                conflict_target=[User_listModel.user_id],
+                update={
+                    User_listModel.message_count: User_listModel.message_count + 1,
+                    User_listModel.last_visit: fn.now()
+                }
+            )
+        ).execute()
+
+        # Фильтруем команды
+        if message.text and message.text.startswith("/"):
+            try:
+                await message.delete()
+            except Exception as e:
+                logger.error(f"Не удалось удалить команду в чате {message.chat.id}: {e}")
+            return
+
+        username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
+        total_exp_to_award = 0
+        level_exp_to_award = 0
+        bonus_exp_to_award = 0
+
+        # Проверяем винстрик
+        is_new_day, streak = check_visit_streak(user_id)
+        if is_new_day and streak > 1:
+            # Начисляем опыт за винстрик
+            streak_exp = 10 * streak
+            level_exp_to_award += streak_exp
+            total_exp_to_award += streak_exp
+
+            await message.reply(
+                f"🎉 <b>{username}</b>, в чате {streak}-й день подряд!\nВы получаете <b>{streak_exp}</b> опыта за активность!",
+                parse_mode="HTML"
+            )
+
+        # Проверяем шанс получения бонусного опыта (1%)
+        if random.random() < 0.01:
+            bonus_exp = random.randint(10, 100)
+            bonus_exp_to_award += bonus_exp
+            total_exp_to_award += bonus_exp
+
+            await message.reply(
+                f"🎲 <b>{username}</b> получает <b>{bonus_exp}</b> бонусного опыта за активность!",
+                parse_mode="HTML"
+            )
+
+        # Начисляем опыт за сообщение
+        level_exp_to_award += 1
+        total_exp_to_award += 1
+
+        # Начисляем весь накопленный опыт и проверяем повышение уровня
+        if total_exp_to_award > 0:
+            await award_exp_and_check_level_up(user_id, level_exp_to_award, bonus_exp_to_award, username, message, bot)
+
+    except Exception as e:
+        logger.error(f"Ошибка в handle_all_messages для user_id {message.from_user.id}: {e}")
