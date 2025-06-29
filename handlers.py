@@ -1363,6 +1363,8 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             text, markup = burmalda_game.create_shop_menu(user_id)
             await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
             
+        elif action == "finish":
+            return
         else:
             await call.answer("❌ Неизвестное действие")
             
