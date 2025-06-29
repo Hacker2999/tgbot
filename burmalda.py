@@ -238,15 +238,16 @@ class BurmaldaGame:
         commission -= level_reductions * COMMISSION_REDUCTION_PER_5_LEVELS
         return max(commission, 0.05)  # Минимальная комиссия 5%
     
-    async def play_roulette_game(self, user_id: int) -> GameResult:
+    async def play_roulette_game(self, user_id: int, dice_value: int = None) -> GameResult:
         """Игра в рулетку (переделанная под очки)"""
         try:
             # Бот выбирает условие
             condition = random.choice(["больше", "меньше"])
             border = random.randint(2, 5)
             
-            # Кидаем кубик
-            dice_value = random.randint(1, 6)
+            # Используем переданное значение или генерируем случайное
+            if dice_value is None:
+                dice_value = random.randint(1, 6)
             
             # Проверяем результат
             won = (dice_value > border) if condition == "больше" else (dice_value < border)
@@ -270,12 +271,15 @@ class BurmaldaGame:
             logger.error(f"Ошибка в игре рулетка для user_id {user_id}: {e}")
             return GameResult(won=False, message="❌ Ошибка в игре")
     
-    async def play_dice_game(self, user_id: int) -> GameResult:
+    async def play_dice_game(self, user_id: int, dice_value: int = None) -> GameResult:
         """Игра в кости"""
         try:
             # Бот выбирает условие
             condition = random.choice(["четное", "нечетное", "больше 3", "меньше 4"])
-            dice_value = random.randint(1, 6)
+            
+            # Используем переданное значение или генерируем случайное
+            if dice_value is None:
+                dice_value = random.randint(1, 6)
             
             # Проверяем результат
             won = False
@@ -306,11 +310,17 @@ class BurmaldaGame:
             logger.error(f"Ошибка в игре кости для user_id {user_id}: {e}")
             return GameResult(won=False, message="❌ Ошибка в игре")
     
-    async def play_slot_game(self, user_id: int) -> GameResult:
+    async def play_slot_game(self, user_id: int, slot_values: List[int] = None) -> GameResult:
         """Игра в слоты"""
         try:
             symbols = ["🍎", "🍊", "🍇", "🍒", "🍓", "🍉"]
-            reels = [random.choice(symbols) for _ in range(3)]
+            
+            if slot_values is None:
+                # Генерируем случайные значения
+                reels = [random.choice(symbols) for _ in range(3)]
+            else:
+                # Используем переданные значения (индексы символов)
+                reels = [symbols[i % len(symbols)] for i in slot_values]
             
             # Победа если все символы одинаковые
             won = len(set(reels)) == 1
@@ -399,7 +409,7 @@ class BurmaldaGame:
             f"🎮 <b>Burmalda - Игровая система</b>\n\n"
             f"💰 Отвальчики: <b>{credits}</b>\n"
             f"🏆 Очки: <b>{points}</b>\n"
-            f"🎯 Стоимость игры: <b>{GAME_COST}</b> отвальчиков\n\n"
+            f"🎯 Стоимость игры: <b>{GAME_COST}</b> отвальчиков за 3 попытки\n\n"
             f"🏅 <b>Награды за победы:</b>\n"
             f"• 1 победа: {ATTEMPT_REWARDS[1]} очков + {VICTORY_BONUS_EXP[1]} бонусного опыта\n"
             f"• 2 победы: {ATTEMPT_REWARDS[2]} очков + {VICTORY_BONUS_EXP[2]} бонусного опыта\n"

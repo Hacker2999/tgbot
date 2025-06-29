@@ -781,9 +781,9 @@ async def help_command(message: Message) -> None:
         "<b>/b</b> — Бан пользователя (ответом на сообщение, можно указать срок: <code>/b 1d</code>)\n"
         "\n"
         "<b>🎮 Burmalda - Игровая система:</b>\n"
-        "• Ежедневно получайте 100 кредитов\n"
-        "• Играйте в рулетку, кости, слоты и блэкджек за 30 кредитов\n"
-        "• Блэкджек - одна попытка, остальные игры - 3 попытки\n"
+        "• Ежедневно получайте 100 отвальчиков\n"
+        "• Играйте в рулетку, кости, слоты и блэкджек за 30 отвальчиков\n"
+        "• Каждая игра включает 3 попытки (кроме блэкджека - 1 попытка)\n"
         "• Зарабатывайте очки и бонусный опыт за победы:\n"
         "  - 1 победа: 15 очков + 30 бонусного опыта\n"
         "  - 2 победы: 35 очков + 60 бонусного опыта\n"
@@ -1248,26 +1248,30 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
                 await call.answer("❌ Это не ваша игра!", show_alert=True)
                 return
             
-            # Проверяем кредиты
-            credits = burmalda_game.get_user_credits(user_id)
-            if credits < GAME_COST:
-                await call.answer(f"❌ Недостаточно отвальчиков! Нужно: {GAME_COST}, у вас: {credits}", show_alert=True)
-                return
-                
-            # Тратим кредиты
-            if not burmalda_game.spend_credits(user_id, GAME_COST):
-                await call.answer("❌ Ошибка при списании отвальчиков", show_alert=True)
-                return
-                
-            # Инициализируем игру
-            burmalda_game.active_games[user_id] = {
-                "game_type": game_type,
-                "attempts": 0,
-                "wins": 0,
-                "messages": []
-            }
+            # Проверяем, есть ли уже активная игра
+            game_state = burmalda_game.active_games.get(user_id)
             
-            # Начинаем игру
+            if not game_state:
+                # Начинаем новую игру - проверяем кредиты
+                credits = burmalda_game.get_user_credits(user_id)
+                if credits < GAME_COST:
+                    await call.answer(f"❌ Недостаточно отвальчиков! Нужно: {GAME_COST}, у вас: {credits}", show_alert=True)
+                    return
+                    
+                # Тратим кредиты за всю игру
+                if not burmalda_game.spend_credits(user_id, GAME_COST):
+                    await call.answer("❌ Ошибка при списании отвальчиков", show_alert=True)
+                    return
+                    
+                # Инициализируем новую игру
+                burmalda_game.active_games[user_id] = {
+                    "game_type": game_type,
+                    "attempts": 0,
+                    "wins": 0,
+                    "messages": []
+                }
+            
+            # Начинаем/продолжаем игру
             await start_burmalda_game(call, bot, user_id, game_type)
             
         elif action == "remove":
@@ -1377,13 +1381,40 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
         # Увеличиваем счетчик попыток
         game_state["attempts"] += 1
         
-        # Играем в выбранную игру
+        # Удаляем предыдущие сообщения если есть (стикер и результат)
+        if len(game_state["messages"]) >= 2:
+            try:
+                # Удаляем последние 2 сообщения (стикер и результат)
+                await bot.delete_message(call.message.chat.id, game_state["messages"][-2])
+                await bot.delete_message(call.message.chat.id, game_state["messages"][-1])
+                # Убираем их из списка
+                game_state["messages"] = game_state["messages"][:-2]
+            except Exception:
+                pass
+                
+        # Отправляем интерактивный стикер в зависимости от игры
+        sticker_emoji = {
+            "roulette": "🎲",
+            "dice": "🎯", 
+            "slot": "🎰",
+            "blackjack": "🃏"
+        }.get(game_type, "🎮")
+        
+        # Отправляем стикер
+        sticker_msg = await bot.send_dice(
+            chat_id=call.message.chat.id,
+            emoji=sticker_emoji
+        )
+        
+        # Играем в выбранную игру с использованием значения из стикера
         if game_type == "roulette":
-            result = await burmalda_game.play_roulette_game(user_id)
+            result = await burmalda_game.play_roulette_game(user_id, sticker_msg.dice.value)
         elif game_type == "dice":
-            result = await burmalda_game.play_dice_game(user_id)
+            result = await burmalda_game.play_dice_game(user_id, sticker_msg.dice.value)
         elif game_type == "slot":
-            result = await burmalda_game.play_slot_game(user_id)
+            # Для слотов используем значения из стикера
+            slot_values = [sticker_msg.dice.value] * 3  # Повторяем значение для всех 3 барабанов
+            result = await burmalda_game.play_slot_game(user_id, slot_values)
         elif game_type == "blackjack":
             result = await burmalda_game.play_blackjack_game(user_id)
         else:
@@ -1408,14 +1439,7 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
             f"🎯 Победы: {game_state['wins']}/3"
         )
         
-        # Удаляем предыдущее сообщение если есть
-        if game_state["messages"]:
-            try:
-                await bot.delete_message(call.message.chat.id, game_state["messages"][-1])
-            except Exception:
-                pass
-                
-        # Отправляем новое сообщение
+        # Отправляем новое сообщение с результатом
         new_message = await bot.send_message(
             chat_id=call.message.chat.id,
             text=result_text,
@@ -1423,7 +1447,8 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
             parse_mode="HTML"
         )
         
-        # Сохраняем ID сообщения
+        # Сохраняем ID сообщений
+        game_state["messages"].append(sticker_msg.message_id)
         game_state["messages"].append(new_message.message_id)
         
         await call.answer()
