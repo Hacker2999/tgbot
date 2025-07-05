@@ -1032,12 +1032,24 @@ async def add_rp_action(message: Message, bot: Bot) -> None:
         
         # Создаем новое действие
         logger.info(f"add_rp_action: создаю новое действие: {trigger_word_normalized} -> {action_text}")
-        RpActionModel.create(
-            chat_id=message.chat.id,
-            trigger_word=trigger_word_normalized,
-            action_text=action_text,
-            created_by=message.from_user.id
-        )
+        (
+            RpActionModel
+            .insert({
+                RpActionModel.chat_id: message.chat.id,
+                RpActionModel.trigger_word: trigger_word_normalized,
+                RpActionModel.action_text: action_text,
+                RpActionModel.created_by: message.from_user.id,
+                RpActionModel.created_at: fn.now()
+            })
+            .on_conflict(
+                conflict_target=[RpActionModel.chat_id, RpActionModel.trigger_word],
+                update={
+                    RpActionModel.action_text: action_text,
+                    RpActionModel.created_by: message.from_user.id,
+                    RpActionModel.created_at: fn.now()
+                }
+            )
+        ).execute()
         
         # Очищаем кэш для этого чата
         clear_rp_cache(message.chat.id)
