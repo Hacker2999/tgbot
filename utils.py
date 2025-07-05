@@ -315,18 +315,33 @@ async def kick_for_unactive(bot, chat_id: int) -> None:
             try:
                 # Проверяем, является ли пользователь администратором
                 if await is_admin(bot, chat_id, result.user_id):
+                    logger.debug(f"Пропускаем администратора {result.user_id}")
                     continue
                 
                 # Проверяем, прошло ли более 30 дней с последнего посещения
                 last_visit = result.last_visit
                 if last_visit.tzinfo is None:
+                    # Если время без часового пояса, считаем его UTC
                     last_visit = last_visit.replace(tzinfo=timezone.utc)
+                
+                # Приводим к московскому времени для корректного сравнения
                 last_visit_msk = last_visit.astimezone(moscow_tz)
                 
                 if last_visit_msk < thirty_days_ago:
-                    # Кикаем пользователя
+                    # Проверяем, что пользователь все еще в чате
                     try:
                         member = await bot.get_chat_member(chat_id, result.user_id)
+                        
+                        # Пропускаем ботов
+                        if member.user.is_bot:
+                            logger.debug(f"Пропускаем бота {result.user_id}")
+                            continue
+                            
+                        # Проверяем, что пользователь не покинул чат
+                        if member.status in ("left", "kicked"):
+                            logger.debug(f"Пользователь {result.user_id} уже покинул чат")
+                            continue
+                            
                         username = member.user.username if member.user.username else member.user.first_name
                         
                         # Баним и сразу разбаниваем (это кикает пользователя)
@@ -334,13 +349,16 @@ async def kick_for_unactive(bot, chat_id: int) -> None:
                         await bot.unban_chat_member(chat_id, result.user_id)
                         
                         kicked_count += 1
-                        logger.info(f"Пользователь {username} (ID: {result.user_id}) кикнут за неактивность более 30 дней")
+                        logger.info(f"Пользователь {username} (ID: {result.user_id}) кикнут за неактивность более 30 дней. Последний визит: {last_visit_msk.strftime('%d.%m.%Y %H:%M')}")
                         
                         # Небольшая пауза между киками
                         await asyncio.sleep(1)
                         
                     except Exception as e:
-                        logger.error(f"Ошибка при кике пользователя {result.user_id}: {e}")
+                        if "user not found" in str(e).lower() or "user is not a member" in str(e).lower():
+                            logger.debug(f"Пользователь {result.user_id} не найден в чате или уже покинул его")
+                        else:
+                            logger.error(f"Ошибка при кике пользователя {result.user_id}: {e}")
                         continue
                         
             except Exception as e:
@@ -353,6 +371,8 @@ async def kick_for_unactive(bot, chat_id: int) -> None:
                 text=f"🔨 Автоматически кикнуто {kicked_count} неактивных пользователей (неактивность более 30 дней)"
             )
             logger.info(f"Автоматический кик завершен. Кикнуто пользователей: {kicked_count}")
+        else:
+            logger.info("Нет неактивных пользователей для кика")
 
     except Exception as e:
         logger.error(f"Ошибка при проверке неактивных пользователей: {e}")
