@@ -128,12 +128,13 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
                 User_listModel
                 .insert({
                     User_listModel.created_at: fn.now(),
+                    User_listModel.chat_id: chat_id,
                     User_listModel.user_id: user_id,
                     User_listModel.is_verified: True,
                     User_listModel.last_visit: fn.now(),
                 })
                 .on_conflict(
-                    conflict_target=[User_listModel.user_id],
+                    conflict_target=[User_listModel.chat_id, User_listModel.user_id],
                     update={User_listModel.is_verified: True, User_listModel.last_visit: fn.now()}
                 )
             ).execute()
@@ -143,13 +144,14 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
             User_listModel
             .insert({
                 User_listModel.created_at: fn.now(),
+                User_listModel.chat_id: chat_id,
                 User_listModel.user_id: user_id,
                 User_listModel.is_verified: False,
                 User_listModel.last_visit: fn.now(),
                 User_listModel.rank: 1,  # Начальный уровень
             })
             .on_conflict(
-                conflict_target=[User_listModel.user_id],
+                conflict_target=[User_listModel.chat_id, User_listModel.user_id],
                 update={User_listModel.is_verified: False, User_listModel.last_visit: fn.now()}
             )
         ).execute()
@@ -230,6 +232,7 @@ async def captcha_callback(call: CallbackQuery, bot: Bot) -> None:
                 # Обновить is_verified=True
                 try:
                     User_listModel.update({User_listModel.is_verified: True}).where(
+                        User_listModel.chat_id == chat_id,
                         User_listModel.user_id == user_id
                     ).execute()
                 except DatabaseError as db_err:
@@ -244,7 +247,7 @@ async def captcha_callback(call: CallbackQuery, bot: Bot) -> None:
                     q = (
                         TextModel
                         .select(TextModel.text_of)
-                        .where(TextModel.target == "welcome_message")
+                        .where(TextModel.chat_id == chat_id, TextModel.target == "welcome_message")
                         .first()
                     )
                     WELCOME_MESSAGE = q.text_of if q else "Добро пожаловать!"
@@ -277,14 +280,14 @@ async def handle_member_leave(event: ChatMemberUpdated, bot: Bot) -> None:
         q = (
             TextModel
             .select(TextModel.text_of)
-            .where(TextModel.target == "bye_message")
+            .where(TextModel.chat_id == event.chat.id, TextModel.target == "bye_message")
             .first()
         )
         GOODBYE_MESSAGE = q.text_of if q else "До свидания!"
         q2 = (
             User_listModel
             .select(User_listModel.created_at, User_listModel.message_count)
-            .where(User_listModel.user_id == event.old_chat_member.user.id)
+            .where(User_listModel.chat_id == event.chat.id, User_listModel.user_id == event.old_chat_member.user.id)
             .first()
         )
         if q2:
@@ -321,7 +324,7 @@ async def stat(message: Message, bot: Bot) -> None:
         q = (
             User_listModel
             .select(User_listModel.created_at, User_listModel.message_count, User_listModel.level_exp, User_listModel.bonus_exp, User_listModel.credits)
-            .where(User_listModel.user_id == message.from_user.id)
+            .where(User_listModel.chat_id == message.chat.id, User_listModel.user_id == message.from_user.id)
             .first()
         )
         if q:
@@ -390,8 +393,16 @@ async def set_welcome(message: Message, bot: Bot) -> None:
             return
         q = (
             TextModel
-            .update({TextModel.text_of: WELCOME_MESSAGE})
-            .where(TextModel.target == "welcome_message")
+            .insert({
+                TextModel.chat_id: message.chat.id,
+                TextModel.target: "welcome_message",
+                TextModel.text_of: WELCOME_MESSAGE,
+                TextModel.edited_at: fn.now()
+            })
+            .on_conflict(
+                conflict_target=[TextModel.chat_id, TextModel.target],
+                update={TextModel.text_of: WELCOME_MESSAGE, TextModel.edited_at: fn.now()}
+            )
         )
         q.execute()
         await message.reply("Приветствие обновлено!")
@@ -417,8 +428,16 @@ async def set_bye(message: Message, bot: Bot) -> None:
             return
         q = (
             TextModel
-            .update({TextModel.text_of: GOODBYE_MESSAGE})
-            .where(TextModel.target == "bye_message")
+            .insert({
+                TextModel.chat_id: message.chat.id,
+                TextModel.target: "bye_message",
+                TextModel.text_of: GOODBYE_MESSAGE,
+                TextModel.edited_at: fn.now()
+            })
+            .on_conflict(
+                conflict_target=[TextModel.chat_id, TextModel.target],
+                update={TextModel.text_of: GOODBYE_MESSAGE, TextModel.edited_at: fn.now()}
+            )
         )
         q.execute()
         await message.reply("Прощание обновлено!")
@@ -443,11 +462,12 @@ async def add_button(message: Message, bot: Bot) -> None:
             q = (
                 Button_listModel
                 .insert({
+                    Button_listModel.chat_id: message.chat.id,
                     Button_listModel.button_name: button_name,
                     Button_listModel.button_link: link,
                 })
                 .on_conflict(
-                    conflict_target=[Button_listModel.button_link],
+                    conflict_target=[Button_listModel.chat_id, Button_listModel.button_link],
                     update={
                         Button_listModel.button_name: button_name,
                         Button_listModel.button_link: link,
@@ -473,7 +493,10 @@ async def del_button(message: Message, bot: Bot) -> None:
         return
     try:
         text = re.sub(r'^/del_button\S*\s', '', message.text).strip()
-        q = Button_listModel.delete().where(Button_listModel.button_name == text)
+        q = Button_listModel.delete().where(
+            Button_listModel.chat_id == message.chat.id,
+            Button_listModel.button_name == text
+        )
         q.execute()
         await message.reply(f"Удалена кнопка: {text}")
     except Exception as e:
@@ -499,12 +522,13 @@ async def add_rules(message: Message, bot: Bot) -> None:
         q = (
             TextModel
             .insert({
+                TextModel.chat_id: message.chat.id,
                 TextModel.target: "rules",
                 TextModel.text_of: rules_text,
                 TextModel.edited_at: fn.now()
             })
             .on_conflict(
-                conflict_target=[TextModel.target],
+                conflict_target=[TextModel.chat_id, TextModel.target],
                 update={TextModel.text_of: rules_text, TextModel.edited_at: fn.now()}
             )
         )
@@ -525,7 +549,7 @@ async def send_rules(message: Message) -> None:
         q = (
             TextModel
             .select(TextModel.text_of)
-            .where(TextModel.target == "rules")
+            .where(TextModel.chat_id == message.chat.id, TextModel.target == "rules")
             .first()
         )
         rules = q.text_of if q else "Правила не заданы."
@@ -541,7 +565,7 @@ async def send_links(message: Message) -> None:
         if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
             await message.reply("Команды нельзя использовать от имени канала.")
             return
-        query = Button_listModel.select()
+        query = Button_listModel.select().where(Button_listModel.chat_id == message.chat.id)
         builder = InlineKeyboardBuilder()
         result = [
             {
@@ -575,7 +599,7 @@ async def measure_size(message: Message) -> None:
         q = (
             SizeModel
             .select(SizeModel.size, SizeModel.date)
-            .where(SizeModel.user_id == user_id)
+            .where(SizeModel.chat_id == message.chat.id, SizeModel.user_id == user_id)
             .first()
         )
         if q and q.date == today:
@@ -594,12 +618,13 @@ async def measure_size(message: Message) -> None:
             (
                 SizeModel
                 .insert({
+                    SizeModel.chat_id: message.chat.id,
                     SizeModel.user_id: user_id,
                     SizeModel.size: size,
                     SizeModel.date: today
                 })
                 .on_conflict(
-                    conflict_target=[SizeModel.user_id],
+                    conflict_target=[SizeModel.chat_id, SizeModel.user_id, SizeModel.date],
                     update={SizeModel.size: size, SizeModel.date: today}
                 )
             ).execute()

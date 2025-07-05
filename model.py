@@ -15,6 +15,7 @@ class BaseModel(Model):
 class BanList(BaseModel):
     id = BigAutoField(primary_key=True)  # bigint, генерируется по умолчанию как identity
     created_at = TimestampField(constraints=[SQL('DEFAULT now()')])  # временная метка с часовым поясом
+    chat_id = BigIntegerField(null=False)  # ID чата, где произошел бан
     user_id = BigIntegerField(null=True)  # bigint, может быть пустым
     ban_start = TimestampField(null=False)  # временная метка без часового пояса
     ban_end = TimestampField(null=False)  # временная метка без часового пояса
@@ -27,6 +28,7 @@ class BanList(BaseModel):
 class TextModel(BaseModel):
     id = BigAutoField(primary_key=True)  # bigint, генерируется по умолчанию как identity
     edited_at = TimestampField(null=True)  # временная метка без часового пояса, может быть пустой
+    chat_id = BigIntegerField(null=False)  # ID чата, для которого создан текст
     target = TextField(null=False)  # текст, не может быть пустым
     text_of = TextField(null=False)  # текст, не может быть пустым
 
@@ -36,7 +38,8 @@ class TextModel(BaseModel):
 class AnekModel(BaseModel):
     id = BigAutoField(primary_key=True)
     created_at = TimestampField(constraints=[SQL('DEFAULT now()')])
-    user_id = BigIntegerField(null=False,unique=True)
+    chat_id = BigIntegerField(null=False)  # ID чата, где запрашивались анекдоты
+    user_id = BigIntegerField(null=False)
     count = BigIntegerField(default=0)
 
     class Meta:
@@ -45,7 +48,8 @@ class AnekModel(BaseModel):
 class User_listModel(BaseModel):
     id = BigAutoField(primary_key=True)
     created_at = TimestampField(constraints=[SQL('DEFAULT now()')])
-    user_id = BigIntegerField(null=False,unique=True)
+    chat_id = BigIntegerField(null=False)  # ID чата, где зарегистрирован пользователь
+    user_id = BigIntegerField(null=False)
     message_count = BigIntegerField(default=0)
     is_verified = BooleanField(default=False)  # Прошел ли пользователь капчу
     level_exp = BigIntegerField(default=0)
@@ -71,6 +75,7 @@ class Chat_listModel(BaseModel):
 
 class Button_listModel(BaseModel):
     id = BigAutoField(primary_key=True)  # bigint, генерируется по умолчанию как identity
+    chat_id = BigIntegerField(null=False)  # ID чата, для которого создана кнопка
     button_name = TextField(null=False)  # текст, не может быть пустым
     button_link = TextField(null=False)  # текст, не может быть пустым
 
@@ -79,7 +84,8 @@ class Button_listModel(BaseModel):
 
 class SizeModel(BaseModel):
     id = BigAutoField(primary_key=True)
-    user_id = BigIntegerField(null=False, unique=True)
+    chat_id = BigIntegerField(null=False)  # ID чата, где измерялся размер
+    user_id = BigIntegerField(null=False)
     size = IntegerField(null=False)
     date = DateField(null=False)  # Дата, когда был установлен размер
 
@@ -89,6 +95,7 @@ class SizeModel(BaseModel):
 class CreditsHistoryModel(BaseModel):
     """История выдачи кредитов для отслеживания ежедневных начислений"""
     id = BigAutoField(primary_key=True)
+    chat_id = BigIntegerField(null=False)  # ID чата, где выдавались кредиты
     user_id = BigIntegerField(null=False)
     credits_amount = BigIntegerField(null=False)  # Количество выданных кредитов
     issued_date = DateField(null=False)  # Дата выдачи
