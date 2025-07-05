@@ -86,6 +86,16 @@ CREATE TABLE IF NOT EXISTS credits_history (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Таблица для RP-действий
+CREATE TABLE IF NOT EXISTS rp_actions (
+    id BIGSERIAL PRIMARY KEY,
+    chat_id BIGINT NOT NULL,
+    trigger_word TEXT NOT NULL,
+    action_text TEXT NOT NULL,
+    created_by BIGINT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Создаем индексы для оптимизации запросов
 CREATE INDEX IF NOT EXISTS idx_user_list_user_id ON user_list(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_list_last_visit ON user_list(last_visit);
@@ -111,6 +121,10 @@ CREATE INDEX IF NOT EXISTS idx_ban_list_ban_end ON ban_list(ban_end);
 
 CREATE INDEX IF NOT EXISTS idx_credits_history_user_id ON credits_history(user_id);
 CREATE INDEX IF NOT EXISTS idx_credits_history_issued_date ON credits_history(issued_date);
+
+CREATE INDEX IF NOT EXISTS idx_rp_actions_chat_id ON rp_actions(chat_id);
+CREATE INDEX IF NOT EXISTS idx_rp_actions_trigger_word ON rp_actions(trigger_word);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rp_actions_chat_trigger ON rp_actions(chat_id, trigger_word);
 
 -- Добавляем комментарии к таблицам и полям
 COMMENT ON TABLE user_list IS 'Основная таблица пользователей с информацией о статистике, уровне и игровой системе';
@@ -158,6 +172,13 @@ COMMENT ON COLUMN credits_history.user_id IS 'ID пользователя';
 COMMENT ON COLUMN credits_history.credits_amount IS 'Количество выданных кредитов';
 COMMENT ON COLUMN credits_history.issued_date IS 'Дата выдачи';
 
+COMMENT ON TABLE rp_actions IS 'Таблица для хранения RP-действий в чатах';
+COMMENT ON COLUMN rp_actions.chat_id IS 'ID чата, где создано действие';
+COMMENT ON COLUMN rp_actions.trigger_word IS 'Слово-триггер для активации действия';
+COMMENT ON COLUMN rp_actions.action_text IS 'Текст действия, который будет отображаться';
+COMMENT ON COLUMN rp_actions.created_by IS 'ID пользователя, создавшего действие';
+COMMENT ON COLUMN rp_actions.created_at IS 'Дата и время создания действия';
+
 -- Вставляем начальные данные
 INSERT INTO text (target, text_of) VALUES 
     ('welcome_message', 'Добро пожаловать в наш чат!'),
@@ -187,6 +208,16 @@ SELECT
     total_exp
 FROM user_stats
 ORDER BY total_exp DESC, message_count DESC;
+
+CREATE OR REPLACE VIEW chat_rp_actions AS
+SELECT 
+    chat_id,
+    trigger_word,
+    action_text,
+    created_by,
+    created_at
+FROM rp_actions
+ORDER BY chat_id, trigger_word;
 
 -- Создаем функции для удобства
 
@@ -266,8 +297,7 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION update_total_exp()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- Здесь можно добавить логику для автоматического обновления
-    -- Например, пересчет уровня при изменении опыта
+    -- Эта функция может быть расширена для дополнительной логики
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -276,6 +306,27 @@ CREATE TRIGGER trigger_update_total_exp
     AFTER UPDATE OF level_exp, bonus_exp ON user_list
     FOR EACH ROW
     EXECUTE FUNCTION update_total_exp();
+
+-- Функция для получения RP-действий чата
+CREATE OR REPLACE FUNCTION get_chat_rp_actions(p_chat_id BIGINT)
+RETURNS TABLE(
+    trigger_word TEXT,
+    action_text TEXT,
+    created_by BIGINT,
+    created_at TIMESTAMP WITH TIME ZONE
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        ra.trigger_word,
+        ra.action_text,
+        ra.created_by,
+        ra.created_at
+    FROM rp_actions ra
+    WHERE ra.chat_id = p_chat_id
+    ORDER BY ra.trigger_word;
+END;
+$$ LANGUAGE plpgsql;
 
 -- Создаем права доступа (настройте под ваши нужды)
 -- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO your_user;

@@ -96,3 +96,18 @@ class CreditsHistoryModel(BaseModel):
 
     class Meta:
         table_name = 'credits_history'
+
+class RpActionModel(BaseModel):
+    """Модель для хранения RP-действий"""
+    id = BigAutoField(primary_key=True)
+    chat_id = BigIntegerField(null=False)  # ID чата, где создано действие
+    trigger_word = TextField(null=False)  # Слово-триггер (например, "обнять")
+    action_text = TextField(null=False)  # Текст действия (например, "обнял")
+    created_by = BigIntegerField(null=False)  # ID пользователя, создавшего действие
+    created_at = TimestampField(constraints=[SQL('DEFAULT now()')])
+
+    class Meta:
+        table_name = 'rp_actions'
+        indexes = (
+            (('chat_id', 'trigger_word'), True),  # Уникальный индекс для чата + триггер
+        )

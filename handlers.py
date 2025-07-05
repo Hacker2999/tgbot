@@ -14,7 +14,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from peewee import fn, DatabaseError
 
 from baneks_api import fetch_random_joke
-from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel
+from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel, RpActionModel
 from utils import quota_check, calculate_level, calculate_exp_for_level, calculate_messages_for_level, get_user_rank, check_visit_streak, is_admin, award_exp_and_check_level_up
 from config import RULES, API_TOKEN, SPAM_LIMIT, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, KILL_CHAT_PASSWORD
 from burmalda import burmalda_game, GAME_COST, ATTEMPT_REWARDS, WARN_REMOVAL_COST, VICTORY_BONUS_EXP, GAME_ATTEMPTS
@@ -710,6 +710,11 @@ async def help_command(message: Message) -> None:
         "<b>/m</b> — Мут пользователя (ответом на сообщение, можно указать срок: <code>/m 10m</code>)\n"
         "<b>/b</b> — Бан пользователя (ответом на сообщение, можно указать срок: <code>/b 1d</code>)\n"
         "\n"
+        "<b>🎭 RP-действия:</b>\n"
+        "<b>/add_action</b> — Добавить новое RP-действие. Пример: <code>/add_action \"обнять\" \"обнял\"</code>\n"
+        "<b>/action_list</b> — Показать список всех RP-действий в чате\n"
+        "<b>/del_action</b> — Удалить RP-действие. Пример: <code>/del_action \"обнять\"</code>\n"
+        "\n"
         "<b>🎮 Burmalda - Игровая система:</b>\n"
         "• Ежедневно получайте 100 отвальчиков\n"
         "• Играйте в рулетку, слоты и блэкджек за 30 отвальчиков\n"
@@ -935,6 +940,226 @@ async def unwarn_user(message: Message, bot: Bot) -> None:
     except Exception as e:
         logger.error(f"Ошибка в unwarn_user: {e}")
         await message.reply("Произошла ошибка при снятии предупреждений.")
+
+# --- RP-действия ---
+
+@router.message(Command("add_action"))
+async def add_rp_action(message: Message, bot: Bot) -> None:
+    """Добавляет новое RP-действие в чат."""
+    # Отсеиваем привязанный канал и сообщения бота
+    if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+        return
+    if not await is_admin(bot, message.chat.id, message.from_user.id):
+        await message.reply("Только администратор может использовать эту команду.")
+        return
+
+    try:
+        # Улучшенный парсинг аргументов с поддержкой кавычек
+        text = message.text.strip()
+        if not text.startswith('/add_action'):
+            return
+            
+        # Убираем команду
+        args_text = text[len('/add_action'):].strip()
+        
+        # Парсим аргументы в кавычках
+        import re
+        quoted_args = re.findall(r'"([^"]*)"', args_text)
+        
+        if len(quoted_args) < 2:
+            await message.reply(
+                "❌ Неверный формат команды!\n\n"
+                "Использование: /add_action \"триггер\" \"действие\"\n"
+                "Пример: /add_action \"обнять\" \"обнял\"\n\n"
+                "⚠️ Обратите внимание на кавычки!"
+            )
+            return
+        
+        trigger_word = quoted_args[0].strip()
+        action_text = quoted_args[1].strip()
+        
+        # Валидация входных данных
+        if not trigger_word or not action_text:
+            await message.reply("❌ Триггер и действие не могут быть пустыми.")
+            return
+            
+        if len(trigger_word) > 50:
+            await message.reply("❌ Триггер слишком длинный (максимум 50 символов).")
+            return
+            
+        if len(action_text) > 100:
+            await message.reply("❌ Действие слишком длинное (максимум 100 символов).")
+            return
+            
+        # Проверяем на нежелательный контент
+        forbidden_words = ['спам', 'реклама', 'бот', 'admin', 'админ']
+        if any(word in trigger_word.lower() for word in forbidden_words):
+            await message.reply("❌ Триггер содержит запрещенные слова.")
+            return
+            
+        # Нормализуем регистр для поиска
+        trigger_word_normalized = trigger_word.lower().strip()
+        
+        # Проверяем количество действий в чате (лимит 20)
+        action_count = RpActionModel.select().where(RpActionModel.chat_id == message.chat.id).count()
+        if action_count >= 20:
+            await message.reply("❌ Достигнут лимит действий в чате (максимум 20). Удалите некоторые действия командой /del_action.")
+            return
+        
+        # Проверяем, не существует ли уже такое действие в этом чате
+        existing_action = RpActionModel.get_or_none(
+            RpActionModel.chat_id == message.chat.id,
+            RpActionModel.trigger_word == trigger_word_normalized
+        )
+        
+        if existing_action:
+            await message.reply(f"❌ Действие с триггером \"{trigger_word}\" уже существует в этом чате.")
+            return
+        
+        # Создаем новое действие
+        RpActionModel.create(
+            chat_id=message.chat.id,
+            trigger_word=trigger_word_normalized,
+            action_text=action_text,
+            created_by=message.from_user.id
+        )
+        
+        # Очищаем кэш для этого чата
+        clear_rp_cache(message.chat.id)
+        
+        await message.reply(
+            f"✅ Действие \"{trigger_word}\" успешно добавлено!\n\n"
+            f"Теперь можно отвечать на сообщения с текстом \"{trigger_word}\" для активации действия.\n"
+            f"Всего действий в чате: {action_count + 1}/20"
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка в add_rp_action: {e}")
+        await message.reply("❌ Произошла ошибка при добавлении действия. Проверьте формат команды.")
+
+@router.message(Command("action_list"))
+async def list_rp_actions(message: Message, bot: Bot) -> None:
+    """Показывает список всех RP-действий в чате."""
+    # Отсеиваем привязанный канал и сообщения бота
+    if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+        await message.reply("Команды нельзя использовать от имени канала.")
+        return
+
+    try:
+        # Получаем все действия для этого чата
+        actions = RpActionModel.select().where(RpActionModel.chat_id == message.chat.id).order_by(RpActionModel.trigger_word)
+        
+        if not actions:
+            await message.reply(
+                "📝 В этом чате пока нет RP-действий.\n\n"
+                "🔧 Администраторы могут добавить их командой:\n"
+                "<code>/add_action \"триггер\" \"действие\"</code>\n\n"
+                "💡 Пример: <code>/add_action \"обнять\" \"обнял\"</code>",
+                parse_mode="HTML"
+            )
+            return
+        
+        # Формируем список действий
+        action_list = []
+        for i, action in enumerate(actions, 1):
+            action_list.append(f"{i}. <b>{action.trigger_word}</b> → {action.action_text}")
+        
+        response_text = (
+            f"🎭 <b>Список RP-действий в чате ({len(actions)}/20):</b>\n\n" +
+            "\n".join(action_list) + 
+            "\n\n💡 <b>Как использовать:</b>\n"
+            "Ответьте на сообщение пользователя с текстом действия для активации.\n\n"
+            "📝 <b>Пример:</b>\n"
+            "Ответить \"обнять\" на сообщение → @Вы обняли @Пользователь"
+        )
+        
+        await message.reply(response_text, parse_mode="HTML")
+        
+    except Exception as e:
+        logger.error(f"Ошибка в list_rp_actions: {e}")
+        await message.reply("❌ Произошла ошибка при получении списка действий.")
+
+@router.message(Command("del_action"))
+async def delete_rp_action(message: Message, bot: Bot) -> None:
+    """Удаляет RP-действие из чата."""
+    # Отсеиваем привязанный канал и сообщения бота
+    if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+        return
+    if not await is_admin(bot, message.chat.id, message.from_user.id):
+        await message.reply("Только администратор может использовать эту команду.")
+        return
+
+    try:
+        # Улучшенный парсинг аргументов
+        text = message.text.strip()
+        if not text.startswith('/del_action'):
+            return
+            
+        # Убираем команду
+        args_text = text[len('/del_action'):].strip()
+        
+        # Парсим аргумент в кавычках
+        import re
+        quoted_args = re.findall(r'"([^"]*)"', args_text)
+        
+        if len(quoted_args) < 1:
+            await message.reply(
+                "❌ Неверный формат команды!\n\n"
+                "Использование: /del_action \"триггер\"\n"
+                "Пример: /del_action \"обнять\"\n\n"
+                "⚠️ Обратите внимание на кавычки!"
+            )
+            return
+        
+        trigger_word = quoted_args[0].strip()
+        
+        if not trigger_word:
+            await message.reply("❌ Триггер не может быть пустым.")
+            return
+        
+        # Нормализуем регистр для поиска
+        trigger_word_normalized = trigger_word.lower().strip()
+        
+        # Удаляем действие
+        deleted_count = RpActionModel.delete().where(
+            RpActionModel.chat_id == message.chat.id,
+            RpActionModel.trigger_word == trigger_word_normalized
+        ).execute()
+        
+        if deleted_count > 0:
+            # Получаем обновленное количество действий
+            action_count = RpActionModel.select().where(RpActionModel.chat_id == message.chat.id).count()
+            
+            # Очищаем кэш для этого чата
+            clear_rp_cache(message.chat.id)
+            
+            await message.reply(
+                f"✅ Действие \"{trigger_word}\" удалено из чата.\n"
+                f"Осталось действий: {action_count}/20"
+            )
+        else:
+            await message.reply(f"❌ Действие \"{trigger_word}\" не найдено в этом чате.")
+        
+    except Exception as e:
+        logger.error(f"Ошибка в delete_rp_action: {e}")
+        await message.reply("❌ Произошла ошибка при удалении действия. Проверьте формат команды.")
+
+@router.message(Command("clear_rp_cache"))
+async def clear_rp_cache_command(message: Message, bot: Bot) -> None:
+    """Очищает кэш RP-действий для чата (только для админов)."""
+    # Отсеиваем привязанный канал и сообщения бота
+    if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
+        return
+    if not await is_admin(bot, message.chat.id, message.from_user.id):
+        await message.reply("Только администратор может использовать эту команду.")
+        return
+
+    try:
+        clear_rp_cache(message.chat.id)
+        await message.reply("✅ Кэш RP-действий очищен для этого чата.")
+    except Exception as e:
+        logger.error(f"Ошибка в clear_rp_cache_command: {e}")
+        await message.reply("❌ Произошла ошибка при очистке кэша.")
 
 # --- Админ-команды ---
 
@@ -1490,6 +1715,10 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
                 logger.error(f"Не удалось удалить команду в чате {message.chat.id}: {e}")
             return
 
+        # Проверяем RP-действия (только для ответов на сообщения)
+        if message.reply_to_message and message.text:
+            await process_rp_action(message, bot)
+
         username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
         total_exp_to_award = 0
         level_exp_to_award = 0
@@ -1721,3 +1950,111 @@ async def show_blackjack_final(call: CallbackQuery, bot: Bot, user_id: int, play
         text="Вы можете завершить игру или начать новую.",
         reply_markup=builder.as_markup()
     )
+
+# Кэш для RP-действий (chat_id -> {trigger_word: action_text})
+RP_ACTIONS_CACHE = {}
+RP_CACHE_TIMEOUT = 300  # 5 минут
+
+def clear_rp_cache(chat_id: int) -> None:
+    """Очищает кэш RP-действий для указанного чата"""
+    if chat_id in RP_ACTIONS_CACHE:
+        del RP_ACTIONS_CACHE[chat_id]
+        logger.debug(f"Кэш RP-действий очищен для чата {chat_id}")
+
+async def process_rp_action(message: Message, bot: Bot) -> None:
+    """
+    Обрабатывает RP-действия при ответе на сообщения.
+    Формат: пользователь отвечает на сообщение с текстом действия
+    """
+    try:
+        # Защита от спама (3 секунды между использованиями)
+        user_id = message.from_user.id
+        current_time = datetime.now().timestamp()
+        
+        if hasattr(process_rp_action, 'last_usage') and user_id in process_rp_action.last_usage:
+            if current_time - process_rp_action.last_usage[user_id] < 3:
+                await message.reply("⏰ Подождите немного перед следующим RP-действием!")
+                return
+        
+        # Инициализируем словарь для отслеживания использования
+        if not hasattr(process_rp_action, 'last_usage'):
+            process_rp_action.last_usage = {}
+        
+        process_rp_action.last_usage[user_id] = current_time
+        
+        # Получаем текст сообщения и разбиваем на строки
+        text_lines = message.text.strip().split('\n')
+        if not text_lines:
+            return
+            
+        trigger_word = text_lines[0].strip().lower()
+        
+        # Проверяем кэш
+        chat_id = message.chat.id
+        current_time = datetime.now().timestamp()
+        
+        if chat_id not in RP_ACTIONS_CACHE or current_time - RP_ACTIONS_CACHE[chat_id]['timestamp'] > RP_CACHE_TIMEOUT:
+            # Обновляем кэш
+            actions = RpActionModel.select().where(RpActionModel.chat_id == chat_id)
+            actions_dict = {action.trigger_word: action.action_text for action in actions}
+            RP_ACTIONS_CACHE[chat_id] = {
+                'actions': actions_dict,
+                'timestamp': current_time
+            }
+        
+        # Ищем действие в кэше
+        action_text = RP_ACTIONS_CACHE[chat_id]['actions'].get(trigger_word)
+        
+        if not action_text:
+            return  # Действие не найдено, ничего не делаем
+        
+        # Получаем информацию о пользователях
+        actor_username = message.from_user.username if message.from_user.username else message.from_user.first_name
+        target_username = message.reply_to_message.from_user.username if message.reply_to_message.from_user.username else message.reply_to_message.from_user.first_name
+        
+        # Проверяем, что пользователь не отвечает сам на себя
+        if message.from_user.id == message.reply_to_message.from_user.id:
+            await message.reply("❌ Нельзя использовать RP-действия на своих собственных сообщениях!")
+            return
+        
+        # Проверяем, что цель не бот
+        if message.reply_to_message.from_user.is_bot:
+            await message.reply("❌ Нельзя использовать RP-действия на сообщениях ботов!")
+            return
+        
+        # Формируем текст действия
+        result_action_text = action_text
+        
+        # Если есть дополнительные строки в сообщении, добавляем их как "со словами"
+        additional_text = ""
+        if len(text_lines) > 1:
+            additional_text = " ".join(text_lines[1:]).strip()
+            if additional_text:
+                # Ограничиваем длину дополнительного текста
+                if len(additional_text) > 200:
+                    additional_text = additional_text[:197] + "..."
+                result_action_text += f" со словами: {additional_text}"
+        
+        # Формируем финальное сообщение
+        result_message = f"@{actor_username} {result_action_text} @{target_username}"
+        
+        # Проверяем общую длину сообщения
+        if len(result_message) > 4096:
+            await message.reply("❌ Сообщение слишком длинное! Сократите дополнительный текст.")
+            return
+        
+        # Отправляем сообщение как ответ на исходное сообщение
+        await bot.send_message(
+            chat_id=message.chat.id,
+            text=result_message,
+            reply_to_message_id=message.reply_to_message.message_id
+        )
+        
+        # Удаляем исходное сообщение с действием
+        try:
+            await message.delete()
+        except Exception as e:
+            logger.error(f"Не удалось удалить сообщение с RP-действием: {e}")
+            
+    except Exception as e:
+        logger.error(f"Ошибка при обработке RP-действия: {e}")
