@@ -335,6 +335,18 @@ async def stat(message: Message, bot: Bot) -> None:
             current_level = calculate_level(total_exp)
             user_rank = get_user_rank(current_level)
             
+            # Рассчитываем прогресс до следующего уровня
+            exp_for_current = calculate_exp_for_level(current_level)
+            exp_for_next = calculate_exp_for_level(current_level + 1)
+            exp_in_level = total_exp - exp_for_current
+            exp_to_next = exp_for_next - total_exp
+            
+            # Формируем строку опыта
+            if current_level < 20:  # Максимальный уровень
+                exp_text = f"⭐ Опыт: {total_exp}/{exp_for_next} (+{exp_to_next} до следующего уровня)"
+            else:
+                exp_text = f"⭐ Опыт: {total_exp} (максимальный уровень)"
+            
             await bot.send_message(
                 chat_id=message.chat.id,
                 text=(
@@ -343,7 +355,7 @@ async def stat(message: Message, bot: Bot) -> None:
                     f"⏰ С нами: <b>{days} дн., {hours} ч., {minutes} мин.</b>\n"
                     f"📈 Уровень: <b>{current_level}</b>\n"
                     f"🏅 Звание: <b>{user_rank}</b>\n"
-                    f"⭐ Общий опыт: <b>{total_exp}</b>\n"
+                    f"{exp_text}\n"
                     f"💰 Отвальчики: <b>{q.credits}</b>"
                 ),
                 parse_mode="HTML"
