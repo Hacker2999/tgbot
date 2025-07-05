@@ -1692,27 +1692,51 @@ async def show_blackjack_final(call: CallbackQuery, bot: Bot, user_id: int, play
         dealer_score = sum(dealer_cards)
     player_cards_str = ", ".join(map(str, player_cards))
     dealer_cards_str = ", ".join(map(str, dealer_cards))
-    # Определяем результат
+    
+    # Определяем результат и награды
     if player_bust:
         result = "❌ Перебор! Вы проиграли."
         won = False
+        credits_change = -30  # Теряем 30 отвальчиков
     elif dealer_score > 21 or player_score > dealer_score:
         result = "🎉 Победа!"
         won = True
+        credits_change = 60  # Получаем 60 отвальчиков
     elif player_score == dealer_score:
         result = "🤝 Ничья!"
         won = False
+        credits_change = 0  # Ничья - ничего не теряем и не получаем
     else:
         result = "❌ Проигрыш."
         won = False
+        credits_change = -30  # Теряем 30 отвальчиков
+    
+    # Применяем изменения к отвальчикам
+    if credits_change != 0:
+        if credits_change > 0:
+            burmalda_game.add_points(user_id, credits_change)
+        else:
+            # Для проигрыша просто не начисляем отвальчики (они уже потрачены при начале игры)
+            pass
+    
+    # Формируем сообщение с информацией о выигрыше
+    credits_text = ""
+    if credits_change > 0:
+        credits_text = f"\n💰 Выигрыш: +{credits_change} отвальчиков"
+    elif credits_change < 0:
+        credits_text = f"\n💸 Проигрыш: {credits_change} отвальчиков"
+    else:
+        credits_text = f"\n🤝 Ничья: 0 отвальчиков"
+    
     text = (
         f"🃏 <b>Блэкджек</b>\n\n"
         f"Ваши карты: {player_cards_str}\n"
         f"Ваши очки: <b>{player_score}</b>\n\n"
         f"Карты дилера: {dealer_cards_str}\n"
         f"Очки дилера: <b>{dealer_score}</b>\n\n"
-        f"{result}"
+        f"{result}{credits_text}"
     )
+    
     # Удаляем старое сообщение
     try:
         last_msg_id = game_state["messages"][-1]
@@ -1730,9 +1754,11 @@ async def show_blackjack_final(call: CallbackQuery, bot: Bot, user_id: int, play
             parse_mode="HTML"
         )
         game_state["messages"].append(new_message.message_id)
+    
     # Если победа — увеличиваем счётчик побед
     if won:
         game_state["wins"] += 1
+    
     # Показываем кнопку завершения игры
     from aiogram.utils.keyboard import InlineKeyboardBuilder
     builder = InlineKeyboardBuilder()
