@@ -956,15 +956,20 @@ async def add_rp_action(message: Message, bot: Bot) -> None:
     try:
         # Улучшенный парсинг аргументов с поддержкой кавычек
         text = message.text.strip()
+        logger.info(f"add_rp_action: получен текст: '{text}'")
+        
         if not text.startswith('/add_action'):
+            logger.info("add_rp_action: текст не начинается с /add_action")
             return
             
         # Убираем команду
         args_text = text[len('/add_action'):].strip()
+        logger.info(f"add_rp_action: аргументы после команды: '{args_text}'")
         
         # Парсим аргументы в кавычках
         import re
         quoted_args = re.findall(r'"([^"]*)"', args_text)
+        logger.info(f"add_rp_action: найденные аргументы в кавычках: {quoted_args}")
         
         if len(quoted_args) < 2:
             await message.reply(
@@ -977,31 +982,39 @@ async def add_rp_action(message: Message, bot: Bot) -> None:
         
         trigger_word = quoted_args[0].strip()
         action_text = quoted_args[1].strip()
+        logger.info(f"add_rp_action: триггер='{trigger_word}', действие='{action_text}'")
         
         # Валидация входных данных
         if not trigger_word or not action_text:
+            logger.info("add_rp_action: пустой триггер или действие")
             await message.reply("❌ Триггер и действие не могут быть пустыми.")
             return
             
         if len(trigger_word) > 50:
+            logger.info(f"add_rp_action: триггер слишком длинный: {len(trigger_word)}")
             await message.reply("❌ Триггер слишком длинный (максимум 50 символов).")
             return
             
         if len(action_text) > 100:
+            logger.info(f"add_rp_action: действие слишком длинное: {len(action_text)}")
             await message.reply("❌ Действие слишком длинное (максимум 100 символов).")
             return
             
         # Проверяем на нежелательный контент
         forbidden_words = ['спам', 'реклама', 'бот', 'admin', 'админ']
         if any(word in trigger_word.lower() for word in forbidden_words):
+            logger.info(f"add_rp_action: триггер содержит запрещенные слова: {trigger_word}")
             await message.reply("❌ Триггер содержит запрещенные слова.")
             return
             
         # Нормализуем регистр для поиска
         trigger_word_normalized = trigger_word.lower().strip()
+        logger.info(f"add_rp_action: нормализованный триггер: '{trigger_word_normalized}'")
         
         # Проверяем количество действий в чате (лимит 20)
         action_count = RpActionModel.select().where(RpActionModel.chat_id == message.chat.id).count()
+        logger.info(f"add_rp_action: текущее количество действий в чате: {action_count}")
+        
         if action_count >= 20:
             await message.reply("❌ Достигнут лимит действий в чате (максимум 20). Удалите некоторые действия командой /del_action.")
             return
@@ -1013,10 +1026,12 @@ async def add_rp_action(message: Message, bot: Bot) -> None:
         )
         
         if existing_action:
+            logger.info(f"add_rp_action: действие уже существует: {trigger_word}")
             await message.reply(f"❌ Действие с триггером \"{trigger_word}\" уже существует в этом чате.")
             return
         
         # Создаем новое действие
+        logger.info(f"add_rp_action: создаю новое действие: {trigger_word_normalized} -> {action_text}")
         RpActionModel.create(
             chat_id=message.chat.id,
             trigger_word=trigger_word_normalized,
@@ -1035,6 +1050,7 @@ async def add_rp_action(message: Message, bot: Bot) -> None:
         
     except Exception as e:
         logger.error(f"Ошибка в add_rp_action: {e}")
+        logger.error(f"Полный текст сообщения: '{message.text}'")
         await message.reply("❌ Произошла ошибка при добавлении действия. Проверьте формат команды.")
 
 @router.message(Command("action_list"))
