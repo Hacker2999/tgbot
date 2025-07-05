@@ -25,7 +25,6 @@ CREATE TABLE IF NOT EXISTS user_list (
     rank BIGINT NOT NULL DEFAULT 1,
     -- Поля для системы Burmalda
     credits BIGINT DEFAULT 0,
-    points BIGINT DEFAULT 0,
     last_credits_date DATE
 );
 

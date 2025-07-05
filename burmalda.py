@@ -87,7 +87,6 @@ class BurmaldaGame:
                         User_listModel.created_at: fn.now(),
                         User_listModel.user_id: user_id,
                         User_listModel.credits: DAILY_CREDITS,
-                        User_listModel.points: 0,
                         User_listModel.last_credits_date: today,
                         User_listModel.rank: 1
                     })
@@ -178,7 +177,7 @@ class BurmaldaGame:
             return False
     
     def get_commission_rate(self, user_level: int) -> float:
-        """Рассчитывает комиссию за обмен очков на опыт в зависимости от уровня"""
+        """Рассчитывает комиссию за обмен отвальчиков на опыт в зависимости от уровня"""
         commission = BASE_COMMISSION
         level_reductions = user_level // 5
         commission -= level_reductions * COMMISSION_REDUCTION_PER_5_LEVELS
@@ -318,15 +317,15 @@ class BurmaldaGame:
             f"💰 Отвальчики: <b>{credits}</b>\n"
             f"🎯 Стоимость игры: <b>{GAME_COST}</b> отвальчиков за 3 попытки\n\n"
             f"🏅 <b>Награды за победы:</b>\n"
-            f"• 1 победа: {ATTEMPT_REWARDS[1]} очков\n"
-            f"• 2 победы: {ATTEMPT_REWARDS[2]} очков\n"
-            f"• 3 победы: {ATTEMPT_REWARDS[3]} очков\n\n"
+            f"• 1 победа: {ATTEMPT_REWARDS[1]} отвальчиков\n"
+            f"• 2 победы: {ATTEMPT_REWARDS[2]} отвальчиков\n"
+            f"• 3 победы: {ATTEMPT_REWARDS[3]} отвальчиков\n\n"
             f"Выберите игру или действие:"
         )
         
         builder = InlineKeyboardBuilder()
         builder.button(text="🎲 Рулетка", callback_data=f"burmalda_game_roulette_{user_id}")
-        builder.button(text="Слоты", callback_data=f"burmalda_game_slot_{user_id}")
+        builder.button(text="🎰 Слоты", callback_data=f"burmalda_game_slot_{user_id}")
         builder.button(text="🃏 Блэкджек", callback_data=f"burmalda_game_blackjack_{user_id}")
         builder.button(text="🏪 Магазин", callback_data=f"burmalda_shop_{user_id}")
         builder.adjust(2, 1, 1)
@@ -348,7 +347,7 @@ class BurmaldaGame:
         level = q.rank if q else 1
         
         commission = self.get_commission_rate(level)
-        exchange_rate = int(1 / commission)  # Сколько очков за 1 опыт
+        exchange_rate = int(1 / commission)  # Сколько отвальчиков за 1 опыт
         
         text = (
             f"🏪 <b>Магазин Burmalda</b>\n\n"
@@ -356,20 +355,43 @@ class BurmaldaGame:
             f"⚠️ Предупреждения: <b>{warn_count}</b>\n"
             f"📊 Уровень: <b>{level}</b>\n"
             f"💱 Комиссия: <b>{commission*100:.0f}%</b>\n"
-            f"🔄 Курс обмена: <b>{exchange_rate}</b> очков = 1 опыт\n\n"
+            f"🔄 Курс обмена: <b>{exchange_rate}</b> отвальчиков = 1 опыт\n\n"
             f"Выберите товар:"
         )
         
         builder = InlineKeyboardBuilder()
         if warn_count > 0:
-            builder.button(text=f"⚠️ Снять предупреждение ({WARN_REMOVAL_COST} очков)", 
+            builder.button(text=f"⚠️ Снять предупреждение ({WARN_REMOVAL_COST} отвальчиков)", 
                           callback_data=f"burmalda_remove_warn_{user_id}")
-        builder.button(text=f"⭐ Обменять 100 очков на опыт", 
+        builder.button(text=f"⭐ Обменять 100 отвальчиков на опыт", 
                       callback_data=f"burmalda_exchange_exp_{user_id}")
         builder.button(text="🔙 Назад", callback_data=f"burmalda_main_{user_id}")
         builder.adjust(1)
         
         return text, builder.as_markup()
+    
+    def get_user_points(self, user_id: int) -> int:
+        """Получает количество очков пользователя (используем отвальчики)"""
+        return self.get_user_credits(user_id)
+    
+    def add_points(self, user_id: int, amount: int) -> bool:
+        """Добавляет очки пользователю (используем отвальчики)"""
+        try:
+            (
+                User_listModel
+                .update({
+                    User_listModel.credits: User_listModel.credits + amount
+                })
+                .where(User_listModel.user_id == user_id)
+            ).execute()
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка при добавлении очков для user_id {user_id}: {e}")
+            return False
+    
+    def spend_points(self, user_id: int, amount: int) -> bool:
+        """Тратит очки пользователя (используем отвальчики). Возвращает True если успешно"""
+        return self.spend_credits(user_id, amount)
 
 # Глобальный экземпляр игровой системы
 burmalda_game = BurmaldaGame() 

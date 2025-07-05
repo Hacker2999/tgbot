@@ -54,7 +54,7 @@ class User_listModel(BaseModel):
     last_visit = TimestampField(null=True)  # Дата последнего посещения
     visit_streak = BigIntegerField(default=0)  # Текущий винстрик посещений
     rank = BigIntegerField(null=False,default=1)  # Текущий уровень
-    # Новые поля для системы Burmalda
+    # Поля для системы Burmalda
     credits = BigIntegerField(default=0)  # Кредиты "отвальчики"
     last_credits_date = DateField(null=True)  # Дата последней выдачи кредитов
 

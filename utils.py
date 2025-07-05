@@ -203,7 +203,6 @@ def check_visit_streak(user_id: int) -> Tuple[bool, int]:
                 User_listModel.visit_streak: 1,
                 User_listModel.rank: 1,  # Начальный уровень
                 User_listModel.credits: 0,  # Начальные кредиты
-                User_listModel.points: 0,  # Начальные очки
             }).execute()
             return True, 1
 
@@ -407,17 +406,16 @@ async def award_exp_and_check_level_up(user_id: int, level_exp_amount: int, bonu
         # Получаем текущие данные пользователя
         user = User_listModel.get_or_none(User_listModel.user_id == user_id)
         if not user:
-            # Создаем пользователя если его нет
-            User_listModel.insert({
-                User_listModel.created_at: fn.now(),
-                User_listModel.user_id: user_id,
-                User_listModel.level_exp: 0,
-                User_listModel.bonus_exp: 0,
-                User_listModel.last_visit: fn.now(),
-                User_listModel.rank: 1,
-                User_listModel.credits: 0,  # Начальные кредиты
-                User_listModel.points: 0,  # Начальные очки
-            }).execute()
+            # Создаем нового пользователя
+            (
+                User_listModel
+                .insert({
+                    User_listModel.created_at: fn.now(),
+                    User_listModel.user_id: user_id,
+                    User_listModel.credits: 0,  # Начальные отвальчики
+                    User_listModel.rank: 1
+                })
+            ).execute()
             user = User_listModel.get(User_listModel.user_id == user_id)
         
         # Получаем текущий уровень до начисления опыта

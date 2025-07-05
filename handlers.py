@@ -17,7 +17,7 @@ from baneks_api import fetch_random_joke
 from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel
 from utils import quota_check, calculate_level, calculate_exp_for_level, calculate_messages_for_level, get_user_rank, check_visit_streak, is_admin, award_exp_and_check_level_up
 from config import RULES, API_TOKEN, SPAM_LIMIT, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, KILL_CHAT_PASSWORD
-from burmalda import burmalda_game, GAME_COST, ATTEMPT_REWARDS, WARN_REMOVAL_COST, VICTORY_BONUS_EXP
+from burmalda import burmalda_game, GAME_COST, ATTEMPT_REWARDS, WARN_REMOVAL_COST, VICTORY_BONUS_EXP, GAME_ATTEMPTS
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -721,15 +721,17 @@ async def roulette(message: Message, bot: Bot) -> None:
                 bonus_exp = 20
             user = User_listModel.get_or_none(User_listModel.user_id == message.from_user.id)
             if not user :
-                User_listModel.insert({
-                    User_listModel.created_at: fn.now(),
-                    User_listModel.user_id: message.from_user.id,
-                    User_listModel.bonus_exp: bonus_exp,
-                    User_listModel.last_visit: fn.now(),
-                    User_listModel.rank: 1,  # Начальный уровень
-                    User_listModel.credits: 0,  # Начальные кредиты
-                    User_listModel.points: 0,  # Начальные очки
-                }).execute()
+                (
+                    User_listModel
+                    .insert({
+                        User_listModel.created_at: fn.now(),
+                        User_listModel.user_id: message.from_user.id,
+                        User_listModel.bonus_exp: bonus_exp,
+                        User_listModel.last_visit: fn.now(),
+                        User_listModel.rank: 1,  # Начальный уровень
+                        User_listModel.credits: 0,  # Начальные отвальчики
+                    })
+                ).execute()
             else:
                 username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
                 await award_exp_and_check_level_up(message.from_user.id, 0, bonus_exp, username, message, bot)
@@ -785,13 +787,13 @@ async def help_command(message: Message) -> None:
         "\n"
         "<b>🎮 Burmalda - Игровая система:</b>\n"
         "• Ежедневно получайте 100 отвальчиков\n"
-        "• Играйте в рулетку, кости, слоты и блэкджек за 30 отвальчиков\n"
+        "• Играйте в рулетку, слоты и блэкджек за 30 отвальчиков\n"
         "• Каждая игра включает 3 попытки (кроме блэкджека - 1 попытка)\n"
-        "• Зарабатывайте очки и бонусный опыт за победы:\n"
-        "  - 1 победа: 15 очков + 30 бонусного опыта\n"
-        "  - 2 победы: 35 очков + 60 бонусного опыта\n"
-        "  - 3 победы: 60 очков + 90 бонусного опыта\n"
-        "• Покупайте товары в магазине: снятие предупреждений, обмен очков на опыт\n"
+        "• Зарабатывайте отвальчики и бонусный опыт за победы:\n"
+        "  - 1 победа: 15 отвальчиков + 30 бонусного опыта\n"
+        "  - 2 победы: 35 отвальчиков + 60 бонусного опыта\n"
+        "  - 3 победы: 60 отвальчиков + 90 бонусного опыта\n"
+        "• Покупайте товары в магазине: снятие предупреждений, обмен отвальчиков на опыт\n"
         "\n"
         "<b>ℹ️ Примечания:</b>\n"
         "• <b>Мут</b> — временно запрещает писать сообщения.\n"
@@ -1233,10 +1235,10 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
                 
             points = burmalda_game.get_user_points(user_id)
             if points < WARN_REMOVAL_COST:
-                await call.answer(f"❌ Недостаточно очков! Нужно: {WARN_REMOVAL_COST}, у вас: {points}", show_alert=True)
+                await call.answer(f"❌ Недостаточно отвальчиков! Нужно: {WARN_REMOVAL_COST}, у вас: {points}", show_alert=True)
                 return
                 
-            # Снимаем предупреждение и тратим очки
+            # Снимаем предупреждение и тратим отвальчики
             (
                 User_listModel
                 .update({
@@ -1247,7 +1249,7 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             
             burmalda_game.spend_points(user_id, WARN_REMOVAL_COST)
             
-            await call.answer(f"✅ Предупреждение снято! Потрачено {WARN_REMOVAL_COST} очков", show_alert=True)
+            await call.answer(f"✅ Предупреждение снято! Потрачено {WARN_REMOVAL_COST} отвальчиков", show_alert=True)
             
             # Обновляем меню магазина
             text, markup = burmalda_game.create_shop_menu(user_id)
@@ -1274,15 +1276,15 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
                 return
             points = burmalda_game.get_user_points(user_id)
             if points < 100:
-                await call.answer(f"❌ Недостаточно очков! Нужно: 100, у вас: {points}", show_alert=True)
+                await call.answer(f"❌ Недостаточно отвальчиков! Нужно: 100, у вас: {points}", show_alert=True)
                 return
-            # Рассчитываем опыт за каждые 100 очков
+            # Рассчитываем опыт за каждые 100 отвальчиков
             commission = burmalda_game.get_commission_rate(q.rank)
             exp_gained = int(100 * (1 - commission))
-            # Тратим очки и начисляем опыт
+            # Тратим отвальчики и начисляем опыт
             burmalda_game.spend_points(user_id, 100)
             await award_exp_and_check_level_up(user_id, exp_gained, 0, call.from_user.first_name, call.message, bot)
-            await call.answer(f"✅ Получено {exp_gained} опыта за 100 очков! Комиссия: {commission*100:.0f}%", show_alert=True)
+            await call.answer(f"✅ Получено {exp_gained} опыта за 100 отвальчиков! Комиссия: {commission*100:.0f}%", show_alert=True)
             # Обновляем меню магазина
             text, markup = burmalda_game.create_shop_menu(user_id)
             await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
@@ -1301,12 +1303,53 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
         if not game_state:
             await call.answer("❌ Игра не найдена", show_alert=True)
             return
+            
+        # Проверяем количество попыток
+        if game_state["attempts"] >= GAME_ATTEMPTS:
+            await call.answer("❌ Все попытки использованы! Завершите игру.", show_alert=True)
+            return
+            
         game_state["attempts"] += 1
+        
         from aiogram.utils.keyboard import InlineKeyboardBuilder
         builder = InlineKeyboardBuilder()
+        
         if game_type == "slot":
             result = await burmalda_game.play_slot_game(user_id)
-            # ... существующая логика ...
+            if result.won:
+                game_state["wins"] += 1
+                
+            # Добавляем кнопку завершения
+            builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
+            builder.adjust(1)
+            
+            # Отправляем результат
+            new_message = await bot.send_message(
+                chat_id=call.message.chat.id,
+                text=result.message,
+                reply_markup=builder.as_markup(),
+                parse_mode="HTML"
+            )
+            game_state["messages"].append(new_message.message_id)
+            
+        elif game_type == "roulette":
+            result = await burmalda_game.play_roulette_game(user_id)
+            if result.won:
+                game_state["wins"] += 1
+                
+            # Добавляем кнопку завершения
+            builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
+            builder.adjust(1)
+            
+            # Отправляем результат
+            new_message = await bot.send_message(
+                chat_id=call.message.chat.id,
+                text=result.message,
+                reply_markup=builder.as_markup(),
+                parse_mode="HTML"
+            )
+            game_state["messages"].append(new_message.message_id)
+            
         elif game_type == "blackjack":
             # --- Новый поэтапный блэкджек ---
             # Если первый запуск — раздаём карты
@@ -1347,15 +1390,13 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
                 parse_mode="HTML"
             )
             game_state["messages"].append(new_message.message_id)
-            await call.answer()
-            return
-        elif game_type == "roulette":
-            # ... существующая логика ...
-            pass
+            
         else:
             await call.answer("❌ Неизвестная игра", show_alert=True)
             return
-        # ... остальной код ...
+            
+        await call.answer()
+        
     except Exception as e:
         logger.error(f"Ошибка в start_burmalda_game: {e}")
         await call.answer("❌ Ошибка в игре", show_alert=True)
@@ -1378,13 +1419,19 @@ async def finish_burmalda_game(call: CallbackQuery, bot: Bot) -> None:
             logger.warning(f"[finish_burmalda_game] Игра не найдена для user_id={user_id}")
             await call.answer("❌ Игра не найдена", show_alert=True)
             return
+            
+        # Проверяем, что игра действительно завершена (для блэкджека)
+        if game_state.get("game_type") == "blackjack" and not game_state.get("game_over"):
+            await call.answer("❌ Сначала завершите игру в блэкджек!", show_alert=True)
+            return
+            
         wins = game_state["wins"]
         points_earned = ATTEMPT_REWARDS.get(wins, 0)
         bonus_exp_earned = VICTORY_BONUS_EXP.get(wins, 0)
         logger.info(f"[finish_burmalda_game] wins={wins}, points_earned={points_earned}, bonus_exp_earned={bonus_exp_earned}")
-        # Начисляем очки
+        # Начисляем отвальчики
         if points_earned > 0:
-            logger.info(f"[finish_burmalda_game] Добавляю очки: {points_earned}")
+            logger.info(f"[finish_burmalda_game] Добавляю отвальчики: {points_earned}")
             burmalda_game.add_points(user_id, points_earned)
         # Начисляем бонусный опыт за победы
         if bonus_exp_earned > 0:
@@ -1394,11 +1441,11 @@ async def finish_burmalda_game(call: CallbackQuery, bot: Bot) -> None:
         if wins == 0:
             result_text = "😔 К сожалению, вы не выиграли ни одной попытки..."
         elif wins == 1:
-            result_text = f"🎉 Хорошо! Вы выиграли 1 попытку и получаете {points_earned} очков и {bonus_exp_earned} бонусного опыта!"
+            result_text = f"🎉 Хорошо! Вы выиграли 1 попытку и получаете {points_earned} отвальчиков и {bonus_exp_earned} бонусного опыта!"
         elif wins == 2:
-            result_text = f"🎊 Отлично! Вы выиграли 2 попытки и получаете {points_earned} очков и {bonus_exp_earned} бонусного опыта!"
+            result_text = f"🎊 Отлично! Вы выиграли 2 попытки и получаете {points_earned} отвальчиков и {bonus_exp_earned} бонусного опыта!"
         else:
-            result_text = f"🏆 Превосходно! Вы выиграли все 3 попытки и получаете {points_earned} очков и {bonus_exp_earned} бонусного опыта!"
+            result_text = f"🏆 Превосходно! Вы выиграли все 3 попытки и получаете {points_earned} отвальчиков и {bonus_exp_earned} бонусного опыта!"
         logger.info(f"[finish_burmalda_game] Удаляю сообщения игры: {game_state['messages']}")
         # Удаляем все сообщения игры
         for msg_id in game_state["messages"]:
@@ -1464,8 +1511,7 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
                 User_listModel.message_count: 1,
                 User_listModel.last_visit: fn.now(),
                 User_listModel.rank: 1,  # Начальный уровень
-                User_listModel.credits: 0,  # Начальные кредиты
-                User_listModel.points: 0,  # Начальные очки
+                User_listModel.credits: 0,  # Начальные отвальчики
             })
             .on_conflict(
                 conflict_target=[User_listModel.user_id],
@@ -1670,6 +1716,7 @@ async def show_blackjack_final(call: CallbackQuery, bot: Bot, user_id: int, play
     if won:
         game_state["wins"] += 1
     # Показываем кнопку завершения игры
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
     builder = InlineKeyboardBuilder()
     builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
     builder.adjust(1)
