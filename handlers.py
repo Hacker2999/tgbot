@@ -684,79 +684,6 @@ async def i_want_anekdot(message: Message) -> None:
         logger.error(f"Ошибка в i_want_anekdot: {e}")
         await message.reply("Ошибка при получении анекдота.")
 
-@router.message(Command("roulette"))
-async def roulette(message: Message, bot: Bot) -> None:
-    try:
-        # Отсеиваем привязанный канал и сообщения бота
-        if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
-            await message.reply("Команды нельзя использовать от имени канала.")
-            return
-        # Эта команда не трогает поле is_verified, только мутит пользователя
-        # Парсим ставку (минуты мута)
-        args = message.text.split()
-        if len(args) < 2 or not args[1].isdigit():
-            await message.reply("Использование: /roulette <минуты мута>")
-            return
-        mute_minutes = int(args[1])
-        if mute_minutes < 1 or mute_minutes > 1440:
-            await message.reply("Укажите количество минут от 1 до 1440.")
-            return
-        # 1. Бот выбирает условие (больше или меньше)
-        condition = random.choice(["больше", "меньше"])
-        border = random.randint(2, 5)  # 2-5, чтобы не было слишком просто
-        await message.reply(f"Если выпадет {condition} {border}, то победа 🎲\nКидаем кубик...")
-        # 2. Кидаем кубик (анимированный)
-        dice_msg = await bot.send_dice(message.chat.id, emoji="🎲")
-        dice_value = dice_msg.dice.value  # 1-6
-        # 3. Проверяем результат
-        win = (dice_value > border) if condition == "больше" else (dice_value < border)
-        if win:
-            # Начисляем бонусный опыт
-            bonus_exp = 20 * mute_minutes
-            if not await is_admin(bot, message.chat.id, message.from_user.id):
-                bonus_exp = 20 * mute_minutes
-                if bonus_exp > 500:
-                    bonus_exp = 500
-            else:
-                bonus_exp = 20
-            user = User_listModel.get_or_none(User_listModel.user_id == message.from_user.id)
-            if not user :
-                (
-                    User_listModel
-                    .insert({
-                    User_listModel.created_at: fn.now(),
-                    User_listModel.user_id: message.from_user.id,
-                    User_listModel.bonus_exp: bonus_exp,
-                    User_listModel.last_visit: fn.now(),
-                    User_listModel.rank: 1,  # Начальный уровень
-                        User_listModel.credits: 0,  # Начальные отвальчики
-                    })
-                ).execute()
-            else:
-                username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
-                await award_exp_and_check_level_up(message.from_user.id, 0, bonus_exp, username, message, bot)
-            await message.reply(f"Победа за вами! 🎉\nВы получаете <b>{bonus_exp}</b> бонусного опыта за игру в рулетку.", parse_mode="HTML")
-        else:
-            # Мутим пользователя
-            until_date = datetime.now() + timedelta(minutes=mute_minutes)
-            try:
-                if await is_admin(bot, message.chat.id, message.from_user.id):
-                    await message.reply("Администратор выйди разбийник...")
-                else:
-                    await bot.restrict_chat_member(
-                        chat_id=message.chat.id,
-                        user_id=message.from_user.id,
-                        permissions=ChatPermissions(can_send_messages=False),
-                        until_date=until_date
-                    )
-                    await message.reply("Для быстрого снятия мута, вложитесь в хостинг")
-            except Exception as e:
-                await message.reply("Ошибка при попытке замутить пользователя. Проверьте права бота или не играйте будучи админом.")
-                logger.error(f"Ошибка в roulette mute: {e}")
-    except Exception as e:
-        logger.error(f"Ошибка в roulette: {e}")
-        await message.reply("Ошибка в игре рулетка.")
-
 @router.message(Command("help"))
 async def help_command(message: Message) -> None:
     # Отсеиваем привязанный канал и сообщения бота
@@ -770,8 +697,6 @@ async def help_command(message: Message) -> None:
         "<b>/size</b> — Узнай размер своего бубуя (рандом + никнейм)\n"
         "<b>/size_top</b> — Турнирная таблица размеров за сегодня\n"
         "<b>/anekdot</b> — Получить свежий анекдот (лимит: 3 в день)\n"
-        "<b>/roulette &lt;минуты&gt;</b> — <i>Русская рулетка!</i>\n"
-        "    Пример: <code>/roulette 5</code> — если не повезёт, получите мут на 5 минут\n"
         "<b>/rules</b> — Показать правила чата\n"
         "<b>/links</b> — Список полезных ссылок с кнопками\n"
         "<b>/help</b> — Это меню\n"
@@ -793,13 +718,13 @@ async def help_command(message: Message) -> None:
         "  - 1 победа: 15 отвальчиков + 30 бонусного опыта\n"
         "  - 2 победы: 35 отвальчиков + 60 бонусного опыта\n"
         "  - 3 победы: 60 отвальчиков + 90 бонусного опыта\n"
+        "• Блэкджек: победа = +60 отвальчиков, проигрыш = -30 отвальчиков\n"
         "• Покупайте товары в магазине: снятие предупреждений, обмен отвальчиков на опыт\n"
         "\n"
         "<b>ℹ️ Примечания:</b>\n"
         "• <b>Мут</b> — временно запрещает писать сообщения.\n"
         "• <b>Бан</b> — удаляет пользователя из чата.\n"
         "• Для работы админ-команд бот должен быть админом с нужными правами!\n"
-        "• Для /roulette бот должен иметь право ограничивать пользователей.\n"
         "\n"
         "<i>Если что-то не работает — проверьте права бота или обратитесь к разработчику.</i>"
     )
