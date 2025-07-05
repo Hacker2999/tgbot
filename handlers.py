@@ -1047,6 +1047,11 @@ async def burmalda_command(message: Message, bot: Bot) -> None:
 
 @router.callback_query(F.data.startswith("burmalda_finish_"))
 async def burmalda_finish_callback(call: CallbackQuery, bot: Bot) -> None:
+    # Проверяем, что callback отправил тот же пользователь
+    user_id = int(call.data.split("_")[2])
+    if call.from_user.id != user_id:
+        await call.answer("❌ Это не ваша игра! Вызовите своё меню через /burmalda", show_alert=True)
+        return
     await finish_burmalda_game(call, bot)
 
 @router.callback_query(F.data.startswith("burmalda_"))
@@ -1068,7 +1073,7 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             
             # Проверяем, что callback отправил тот же пользователь
             if call.from_user.id != user_id:
-                await call.answer("❌ Это не ваше меню!", show_alert=True)
+                await call.answer("❌ Это не ваше меню! Вызовите своё меню через /burmalda", show_alert=True)
                 return
                 
             text, markup = burmalda_game.create_main_menu(user_id)
@@ -1080,7 +1085,7 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             
             # Проверяем, что callback отправил тот же пользователь
             if call.from_user.id != user_id:
-                await call.answer("❌ Это не ваше меню!", show_alert=True)
+                await call.answer("❌ Это не ваше меню! Вызовите своё меню через /burmalda", show_alert=True)
                 return
                 
             text, markup = burmalda_game.create_shop_menu(user_id)
@@ -1097,7 +1102,7 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             
             # Проверяем, что callback отправил тот же пользователь
             if call.from_user.id != user_id:
-                await call.answer("❌ Это не ваша игра!", show_alert=True)
+                await call.answer("❌ Это не ваша игра! Вызовите своё меню через /burmalda", show_alert=True)
                 return
             
             # Проверяем, есть ли уже активная игра
@@ -1144,7 +1149,7 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             
             # Проверяем, что callback отправил тот же пользователь
             if call.from_user.id != user_id:
-                await call.answer("❌ Это не ваше меню!", show_alert=True)
+                await call.answer("❌ Это не ваше меню! Вызовите своё меню через /burmalda", show_alert=True)
                 return
                 
             q = (
@@ -1188,7 +1193,7 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             user_id = int(data[-1])
             # Проверяем, что callback отправил тот же пользователь
             if call.from_user.id != user_id:
-                await call.answer("❌ Это не ваше меню!", show_alert=True)
+                await call.answer("❌ Это не ваше меню! Вызовите своё меню через /burmalda", show_alert=True)
                 return
             q = (
                 User_listModel
@@ -1527,10 +1532,20 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
 
 @router.callback_query(F.data.startswith("blackjack_hit_"))
 async def blackjack_hit_callback(call: CallbackQuery, bot: Bot) -> None:
+    # Проверяем, что callback отправил тот же пользователь
+    user_id = int(call.data.split('_')[-1])
+    if call.from_user.id != user_id:
+        await call.answer("❌ Это не ваша игра! Вызовите своё меню через /burmalda", show_alert=True)
+        return
     await process_blackjack_hit(call, bot)
 
 @router.callback_query(F.data.startswith("blackjack_stand_"))
 async def blackjack_stand_callback(call: CallbackQuery, bot: Bot) -> None:
+    # Проверяем, что callback отправил тот же пользователь
+    user_id = int(call.data.split('_')[-1])
+    if call.from_user.id != user_id:
+        await call.answer("❌ Это не ваша игра! Вызовите своё меню через /burmalda", show_alert=True)
+        return
     await process_blackjack_stand(call, bot)
 
 async def process_blackjack_hit(call: CallbackQuery, bot: Bot) -> None:
