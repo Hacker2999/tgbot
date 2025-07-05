@@ -111,7 +111,8 @@ class BurmaldaGame:
                     .insert({
                         CreditsHistoryModel.user_id: user_id,
                         CreditsHistoryModel.credits_amount: DAILY_CREDITS,
-                        CreditsHistoryModel.issued_date: today
+                        CreditsHistoryModel.issued_date: today,
+                        CreditsHistoryModel.created_at: fn.now()
                     })
                 ).execute()
                 

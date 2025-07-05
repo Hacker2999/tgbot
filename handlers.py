@@ -320,7 +320,7 @@ async def stat(message: Message, bot: Bot) -> None:
             return
         q = (
             User_listModel
-            .select(User_listModel.created_at, User_listModel.message_count, User_listModel.level_exp, User_listModel.bonus_exp)
+            .select(User_listModel.created_at, User_listModel.message_count, User_listModel.level_exp, User_listModel.bonus_exp, User_listModel.credits)
             .where(User_listModel.user_id == message.from_user.id)
             .first()
         )
@@ -333,32 +333,20 @@ async def stat(message: Message, bot: Bot) -> None:
             
             total_exp = q.level_exp + q.bonus_exp
             current_level = calculate_level(total_exp)
-            exp_for_current = calculate_exp_for_level(current_level)
-            exp_for_next = calculate_exp_for_level(current_level + 1)
-            # Корректируем уровень, если опыта больше, чем нужно для следующего уровня
-            while total_exp >= exp_for_next and current_level < 20:
-                current_level += 1
-                exp_for_current = calculate_exp_for_level(current_level)
-                exp_for_next = calculate_exp_for_level(current_level + 1)
-            exp_in_level = total_exp - exp_for_current
-            exp_to_next = exp_for_next - total_exp
             user_rank = get_user_rank(current_level)
-            current_messages = q.message_count
-            next_level_messages = calculate_messages_for_level(current_level + 1)
             
             await bot.send_message(
                 chat_id=message.chat.id,
                 text=(
-                    f"Статистика для {username}:\n"
-                    f"Сообщений: {q.message_count}\n"
-                    f"С нами: {days} дн., {hours} ч., {minutes} мин.\n"
-                    f"Уровень: {current_level}\n"
-                    f"Звание: {user_rank}\n"
-                    f"Обычный опыт: {q.level_exp}\n"
-                    f"Бонусный опыт: {q.bonus_exp}\n"
-                    f"Общий опыт: {total_exp}\n"
-                    f"Опыт в уровне: {exp_in_level}/{exp_for_next - exp_for_current} (+{exp_to_next} до следующего уровня)\n"
-                )
+                    f"📊 <b>Статистика {username}</b>\n\n"
+                    f"💬 Сообщений: <b>{q.message_count}</b>\n"
+                    f"⏰ С нами: <b>{days} дн., {hours} ч., {minutes} мин.</b>\n"
+                    f"📈 Уровень: <b>{current_level}</b>\n"
+                    f"🏅 Звание: <b>{user_rank}</b>\n"
+                    f"⭐ Общий опыт: <b>{total_exp}</b>\n"
+                    f"💰 Отвальчики: <b>{q.credits}</b>"
+                ),
+                parse_mode="HTML"
             )
         else:
             await bot.send_message(
@@ -724,11 +712,11 @@ async def roulette(message: Message, bot: Bot) -> None:
                 (
                     User_listModel
                     .insert({
-                        User_listModel.created_at: fn.now(),
-                        User_listModel.user_id: message.from_user.id,
-                        User_listModel.bonus_exp: bonus_exp,
-                        User_listModel.last_visit: fn.now(),
-                        User_listModel.rank: 1,  # Начальный уровень
+                    User_listModel.created_at: fn.now(),
+                    User_listModel.user_id: message.from_user.id,
+                    User_listModel.bonus_exp: bonus_exp,
+                    User_listModel.last_visit: fn.now(),
+                    User_listModel.rank: 1,  # Начальный уровень
                         User_listModel.credits: 0,  # Начальные отвальчики
                     })
                 ).execute()
@@ -1319,14 +1307,24 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
             if result.won:
                 game_state["wins"] += 1
                 
-            # Добавляем кнопку завершения
-            builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
-            builder.adjust(1)
+            # Добавляем информацию о попытках
+            attempts_info = f"\n\n🎯 Попытка {game_state['attempts']}/{GAME_ATTEMPTS}"
+            if game_state["attempts"] < GAME_ATTEMPTS:
+                attempts_info += f"\n🏆 Победы: {game_state['wins']}"
+                # Добавляем кнопку для следующей попытки
+                builder.button(text="🎰 Следующая попытка", callback_data=f"burmalda_game_slot_{user_id}")
+                builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
+                builder.adjust(2)
+            else:
+                attempts_info += f"\n🏆 Итого побед: {game_state['wins']}"
+                # Добавляем только кнопку завершения
+                builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
+                builder.adjust(1)
             
-            # Отправляем результат
+            # Отправляем результат с информацией о попытках
             new_message = await bot.send_message(
                 chat_id=call.message.chat.id,
-                text=result.message,
+                text=result.message + attempts_info,
                 reply_markup=builder.as_markup(),
                 parse_mode="HTML"
             )
@@ -1337,14 +1335,24 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
             if result.won:
                 game_state["wins"] += 1
                 
-            # Добавляем кнопку завершения
-            builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
-            builder.adjust(1)
+            # Добавляем информацию о попытках
+            attempts_info = f"\n\n🎯 Попытка {game_state['attempts']}/{GAME_ATTEMPTS}"
+            if game_state["attempts"] < GAME_ATTEMPTS:
+                attempts_info += f"\n🏆 Победы: {game_state['wins']}"
+                # Добавляем кнопку для следующей попытки
+                builder.button(text="🎲 Следующая попытка", callback_data=f"burmalda_game_roulette_{user_id}")
+                builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
+                builder.adjust(2)
+            else:
+                attempts_info += f"\n🏆 Итого побед: {game_state['wins']}"
+                # Добавляем только кнопку завершения
+                builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
+                builder.adjust(1)
             
-            # Отправляем результат
+            # Отправляем результат с информацией о попытках
             new_message = await bot.send_message(
                 chat_id=call.message.chat.id,
-                text=result.message,
+                text=result.message + attempts_info,
                 reply_markup=builder.as_markup(),
                 parse_mode="HTML"
             )
