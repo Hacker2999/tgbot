@@ -1200,10 +1200,10 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             
         elif action == "remove":
             # Снятие предупреждения
-            if len(data) < 4 or data[3] != "warn":
+            if len(data) < 4 or data[2] != "warn":
                 await call.answer("❌ Неверный формат данных", show_alert=True)
                 return
-            user_id = int(data[2])
+            user_id = int(data[3])
             
             # Проверяем, что callback отправил тот же пользователь
             if call.from_user.id != user_id:
