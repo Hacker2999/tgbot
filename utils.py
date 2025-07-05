@@ -187,17 +187,21 @@ def get_user_rank(level: int) -> str:
         logger.error(f"Ошибка при получении звания для уровня {level}: {e}")
         return "Неизвестное звание"
 
-def check_visit_streak(user_id: int) -> Tuple[bool, int]:
+def check_visit_streak(user_id: int, chat_id: int) -> Tuple[bool, int]:
     """
     Проверяет и обновляет винстрик посещений пользователя.
     Returns: (is_new_day, streak)
     """
     try:
         now = datetime.now(timezone.utc)
-        user = User_listModel.get_or_none(User_listModel.user_id == user_id)
+        user = User_listModel.get_or_none(
+            User_listModel.chat_id == chat_id,
+            User_listModel.user_id == user_id
+        )
         if user is None:
             User_listModel.insert({
                 User_listModel.created_at: fn.now(),
+                User_listModel.chat_id: chat_id,
                 User_listModel.user_id: user_id,
                 User_listModel.last_visit: fn.now(),
                 User_listModel.visit_streak: 1,
@@ -212,7 +216,10 @@ def check_visit_streak(user_id: int) -> Tuple[bool, int]:
             User_listModel.update({
                 User_listModel.last_visit: fn.now(),
                 User_listModel.visit_streak: 1
-            }).where(User_listModel.user_id == user_id).execute()
+            }).where(
+                User_listModel.chat_id == chat_id,
+                User_listModel.user_id == user_id
+            ).execute()
             return True, 1
         elif last_visit.date() == now.date():
             # streak не увеличивается
@@ -222,7 +229,10 @@ def check_visit_streak(user_id: int) -> Tuple[bool, int]:
             User_listModel.update({
                 User_listModel.last_visit: fn.now(),
                 User_listModel.visit_streak: user.visit_streak + 1
-            }).where(User_listModel.user_id == user_id).execute()
+            }).where(
+                User_listModel.chat_id == chat_id,
+                User_listModel.user_id == user_id
+            ).execute()
             return True, user.visit_streak + 1
         else:
             # fallback
@@ -247,7 +257,10 @@ async def award_size_top_exp(bot, chat_id: int) -> None:
         query = (
             SizeModel
             .select(SizeModel.user_id, SizeModel.size)
-            .where(SizeModel.date == today)
+            .where(
+                SizeModel.chat_id == chat_id,
+                SizeModel.date == today
+            )
             .order_by(SizeModel.size.desc())
             .limit(3)
         )
@@ -272,7 +285,7 @@ async def award_size_top_exp(bot, chat_id: int) -> None:
                     place = idx + 1
                     
                     # Начисляем опыт с проверкой повышения уровня
-                    await award_exp_and_check_level_up(result.user_id, 0, rewards[idx], username, None, bot)
+                    await award_exp_and_check_level_up(result.user_id, 0, rewards[idx], username, None, bot, chat_id)
                     
                     await bot.send_message(
                         chat_id=chat_id,
@@ -302,7 +315,10 @@ async def kick_for_unactive(bot, chat_id: int) -> None:
         query = (
             User_listModel
             .select(User_listModel.user_id, User_listModel.last_visit)
-            .where(User_listModel.last_visit.is_null(False))  # Только пользователи с записью о посещении
+            .where(
+                User_listModel.chat_id == chat_id,
+                User_listModel.last_visit.is_null(False)  # Только пользователи с записью о посещении
+            )
         )
         results = list(query)
 
@@ -410,7 +426,7 @@ async def is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
         logger.error(f"Ошибка при проверке прав администратора для user_id {user_id} в чате {chat_id}: {e}")
         return False
 
-async def award_exp_and_check_level_up(user_id: int, level_exp_amount: int, bonus_exp_amount: int, username: str, message=None, bot=None) -> None:
+async def award_exp_and_check_level_up(user_id: int, level_exp_amount: int, bonus_exp_amount: int, username: str, message=None, bot=None, chat_id: int = None) -> None:
     """
     Начисляет опыт пользователю, проверяет повышение уровня и отправляет уведомления.
     
@@ -421,22 +437,34 @@ async def award_exp_and_check_level_up(user_id: int, level_exp_amount: int, bonu
         username (str): Имя пользователя
         message: Объект сообщения для ответа (может быть None)
         bot: Экземпляр бота (может быть None)
+        chat_id (int): ID чата (обязательно для мультичатовости)
     """
     try:
+        if chat_id is None:
+            logger.error(f"chat_id не передан в award_exp_and_check_level_up для user_id {user_id}")
+            return
+            
         # Получаем текущие данные пользователя
-        user = User_listModel.get_or_none(User_listModel.user_id == user_id)
+        user = User_listModel.get_or_none(
+            User_listModel.chat_id == chat_id,
+            User_listModel.user_id == user_id
+        )
         if not user:
             # Создаем нового пользователя
             (
                 User_listModel
                 .insert({
                     User_listModel.created_at: fn.now(),
+                    User_listModel.chat_id: chat_id,
                     User_listModel.user_id: user_id,
                     User_listModel.credits: 0,  # Начальные отвальчики
                     User_listModel.rank: 1
                 })
             ).execute()
-            user = User_listModel.get(User_listModel.user_id == user_id)
+            user = User_listModel.get(
+                User_listModel.chat_id == chat_id,
+                User_listModel.user_id == user_id
+            )
         
         # Получаем текущий уровень до начисления опыта
         current_level_exp = user.level_exp
@@ -475,7 +503,10 @@ async def award_exp_and_check_level_up(user_id: int, level_exp_amount: int, bonu
             User_listModel.level_exp: User_listModel.level_exp + level_exp_amount,
             User_listModel.bonus_exp: User_listModel.bonus_exp + bonus_exp_amount,
             User_listModel.rank: new_level
-        }).where(User_listModel.user_id == user_id).execute()
+        }).where(
+            User_listModel.chat_id == chat_id,
+            User_listModel.user_id == user_id
+        ).execute()
             
     except Exception as e:
         logger.error(f"Ошибка при начислении опыта для user_id {user_id}: {e}")

@@ -182,7 +182,10 @@ async def handle_user_join(event: ChatMemberUpdated, bot: Bot) -> None:
         async def captcha_timeout():
             await asyncio.sleep(CAPTCHA_TIMEOUT)
             # Проверить статус верификации
-            user = User_listModel.select(User_listModel.is_verified).where(User_listModel.user_id == user_id).first()
+            user = User_listModel.select(User_listModel.is_verified).where(
+                User_listModel.chat_id == chat_id,
+                User_listModel.user_id == user_id
+            ).first()
             if not user or not user.is_verified:
                 try:
                     await bot.ban_chat_member(chat_id, user_id)
@@ -675,7 +678,10 @@ async def i_want_anekdot(message: Message) -> None:
         userId = message.from_user.id
         q2 = (
             AnekModel.select(AnekModel.count)
-            .where(AnekModel.user_id == userId)
+            .where(
+                AnekModel.chat_id == message.chat.id,
+                AnekModel.user_id == userId
+            )
             .first()
         )
         count_qu = q2.count if q2 else 0
@@ -689,11 +695,12 @@ async def i_want_anekdot(message: Message) -> None:
                     AnekModel
                     .insert({
                         AnekModel.created_at: fn.now(),
+                        AnekModel.chat_id: message.chat.id,
                         AnekModel.user_id: userId,
                         AnekModel.count: 1
                     })
                     .on_conflict(
-                        conflict_target=[AnekModel.user_id],
+                        conflict_target=[AnekModel.chat_id, AnekModel.user_id],
                         preserve=[AnekModel.created_at],
                         update={AnekModel.count: AnekModel.count + 1}
                     )
@@ -845,10 +852,16 @@ async def killchatall(message: Message, bot: Bot) -> None:
                         pass
         except Exception:
             pass
-        # 5. Очистить все таблицы в базе
+        # 5. Очистить все таблицы в базе для этого чата
         try:
             from model import db
-            db.execute_sql("TRUNCATE TABLE user_list, anek_list, chat_list, button_list, size_list, ban_list, text RESTART IDENTITY CASCADE;")
+            db.execute_sql("DELETE FROM user_list WHERE chat_id = %s;", (chat_id,))
+            db.execute_sql("DELETE FROM anek_list WHERE chat_id = %s;", (chat_id,))
+            db.execute_sql("DELETE FROM button_list WHERE chat_id = %s;", (chat_id,))
+            db.execute_sql("DELETE FROM size_list WHERE chat_id = %s;", (chat_id,))
+            db.execute_sql("DELETE FROM ban_list WHERE chat_id = %s;", (chat_id,))
+            db.execute_sql("DELETE FROM text WHERE chat_id = %s;", (chat_id,))
+            db.execute_sql("DELETE FROM rp_actions WHERE chat_id = %s;", (chat_id,))
         except Exception:
             pass
         # 6. Бот выходит из чата
@@ -888,19 +901,23 @@ async def warn_user(message: Message, bot: Bot) -> None:
             User_listModel
             .insert({
                 User_listModel.created_at: fn.now(),
+                User_listModel.chat_id: chat_id,
                 User_listModel.user_id: user_id,
                 User_listModel.last_visit: fn.now(),
                 User_listModel.warn_count: 1,
                 User_listModel.rank: 1,  # Начальный уровень
             })
             .on_conflict(
-                conflict_target=[User_listModel.user_id],
+                conflict_target=[User_listModel.chat_id, User_listModel.user_id],
                 update={User_listModel.warn_count: User_listModel.warn_count + 1, User_listModel.last_visit: fn.now()}
             )
         )
         q.execute()
         # Получаем новое значение warn_count
-        user_record = User_listModel.get(User_listModel.user_id == user_id)
+        user_record = User_listModel.get(
+            User_listModel.chat_id == chat_id,
+            User_listModel.user_id == user_id
+        )
 
         # Проверяем количество предупреждений
         if user_record.warn_count >= 3:
@@ -913,7 +930,15 @@ async def warn_user(message: Message, bot: Bot) -> None:
                     parse_mode="HTML"
                 )
                 # Сбрасываем счетчик предупреждений
-                User_listModel.update({User_listModel.warn_count: 0}).where(User_listModel.user_id == user_id).execute()
+                q = User_listModel.update({User_listModel.warn_count: 0}).where(
+                    User_listModel.chat_id == chat_id,
+                    User_listModel.user_id == user_id
+                )
+                updated = q.execute()
+                user_record = User_listModel.get_or_none(
+                    User_listModel.chat_id == chat_id,
+                    User_listModel.user_id == user_id
+                )
             except Exception as e:
                 logger.error(f"Ошибка при бане пользователя: {e}")
                 await message.reply("Не удалось удалить пользователя. Проверьте права бота.")
@@ -948,9 +973,15 @@ async def unwarn_user(message: Message, bot: Bot) -> None:
         admin_name = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
 
         # Сбрасываем счетчик предупреждений
-        q = User_listModel.update({User_listModel.warn_count: 0}).where(User_listModel.user_id == user_id)
+        q = User_listModel.update({User_listModel.warn_count: 0}).where(
+            User_listModel.chat_id == message.chat.id,
+            User_listModel.user_id == user_id
+        )
         updated = q.execute()
-        user_record = User_listModel.get_or_none(User_listModel.user_id == user_id)
+        user_record = User_listModel.get_or_none(
+            User_listModel.chat_id == message.chat.id,
+            User_listModel.user_id == user_id
+        )
         old_warn_count = user_record.warn_count if user_record else 0
 
         if not user_record or old_warn_count == 0:
@@ -1433,7 +1464,10 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             q = (
                 User_listModel
                 .select(User_listModel.warn_count)
-                .where(User_listModel.user_id == user_id)
+                .where(
+                    User_listModel.chat_id == call.message.chat.id,
+                    User_listModel.user_id == user_id
+                )
                 .first()
             )
             
@@ -1452,7 +1486,10 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
                 .update({
                     User_listModel.warn_count: User_listModel.warn_count - 1
                 })
-                .where(User_listModel.user_id == user_id)
+                .where(
+                    User_listModel.chat_id == call.message.chat.id,
+                    User_listModel.user_id == user_id
+                )
             ).execute()
             
             burmalda_game.spend_points(user_id, WARN_REMOVAL_COST)
@@ -1476,7 +1513,10 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             q = (
                 User_listModel
                 .select(User_listModel.rank)
-                .where(User_listModel.user_id == user_id)
+                .where(
+                    User_listModel.chat_id == call.message.chat.id,
+                    User_listModel.user_id == user_id
+                )
                 .first()
             )
             if not q:
@@ -1491,7 +1531,7 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             exp_gained = int(100 * (1 - commission))
             # Тратим отвальчики и начисляем опыт
             burmalda_game.spend_points(user_id, 100)
-            await award_exp_and_check_level_up(user_id, exp_gained, 0, call.from_user.first_name, call.message, bot)
+            await award_exp_and_check_level_up(user_id, exp_gained, 0, call.from_user.first_name, call.message, bot, call.message.chat.id)
             await call.answer(f"✅ Получено {exp_gained} опыта за 100 отвальчиков! Комиссия: {commission*100:.0f}%", show_alert=True)
             # Обновляем меню магазина
             text, markup = burmalda_game.create_shop_menu(user_id)
@@ -1745,6 +1785,7 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
             User_listModel
             .insert({
                 User_listModel.created_at: fn.now(),
+                User_listModel.chat_id: message.chat.id,
                 User_listModel.user_id: user_id,
                 User_listModel.message_count: 1,
                 User_listModel.last_visit: fn.now(),
@@ -1752,7 +1793,7 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
                 User_listModel.credits: 0,  # Начальные отвальчики
             })
             .on_conflict(
-                conflict_target=[User_listModel.user_id],
+                conflict_target=[User_listModel.chat_id, User_listModel.user_id],
                 update={
                     User_listModel.message_count: User_listModel.message_count + 1,
                     User_listModel.last_visit: fn.now()
@@ -1778,7 +1819,7 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
         bonus_exp_to_award = 0
 
         # Проверяем винстрик
-        is_new_day, streak = check_visit_streak(user_id)
+        is_new_day, streak = check_visit_streak(user_id, message.chat.id)
         if is_new_day and streak > 1:
             # Начисляем опыт за винстрик
             streak_exp = 10 * streak
@@ -1807,7 +1848,7 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
 
         # Начисляем весь накопленный опыт и проверяем повышение уровня
         if total_exp_to_award > 0:
-            await award_exp_and_check_level_up(user_id, level_exp_to_award, bonus_exp_to_award, username, message, bot)
+            await award_exp_and_check_level_up(user_id, level_exp_to_award, bonus_exp_to_award, username, message, bot, message.chat.id)
 
     except Exception as e:
         logger.error(f"Ошибка в handle_all_messages для user_id {message.from_user.id}: {e}")
