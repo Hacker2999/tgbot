@@ -1307,16 +1307,21 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
             if result.won:
                 game_state["wins"] += 1
                 
-            # Добавляем информацию о попытках
+            # Рассчитываем текущие выигрыши в отвальчиках
+            current_wins = game_state["wins"]
+            current_credits_earned = ATTEMPT_REWARDS.get(current_wins, 0)
+            
+            # Добавляем информацию о попытках и выигрышах
             attempts_info = f"\n\n🎯 Попытка {game_state['attempts']}/{GAME_ATTEMPTS}"
+            attempts_info += f"\n🏆 Победы: {current_wins}"
+            attempts_info += f"\n💰 Выигрыш: {current_credits_earned} отвальчиков"
+            
             if game_state["attempts"] < GAME_ATTEMPTS:
-                attempts_info += f"\n🏆 Победы: {game_state['wins']}"
                 # Добавляем кнопку для следующей попытки
                 builder.button(text="🎰 Следующая попытка", callback_data=f"burmalda_game_slot_{user_id}")
                 builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
                 builder.adjust(2)
             else:
-                attempts_info += f"\n🏆 Итого побед: {game_state['wins']}"
                 # Добавляем только кнопку завершения
                 builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
                 builder.adjust(1)
@@ -1335,16 +1340,21 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
             if result.won:
                 game_state["wins"] += 1
                 
-            # Добавляем информацию о попытках
+            # Рассчитываем текущие выигрыши в отвальчиках
+            current_wins = game_state["wins"]
+            current_credits_earned = ATTEMPT_REWARDS.get(current_wins, 0)
+            
+            # Добавляем информацию о попытках и выигрышах
             attempts_info = f"\n\n🎯 Попытка {game_state['attempts']}/{GAME_ATTEMPTS}"
+            attempts_info += f"\n🏆 Победы: {current_wins}"
+            attempts_info += f"\n💰 Выигрыш: {current_credits_earned} отвальчиков"
+            
             if game_state["attempts"] < GAME_ATTEMPTS:
-                attempts_info += f"\n🏆 Победы: {game_state['wins']}"
                 # Добавляем кнопку для следующей попытки
                 builder.button(text="🎲 Следующая попытка", callback_data=f"burmalda_game_roulette_{user_id}")
                 builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
                 builder.adjust(2)
             else:
-                attempts_info += f"\n🏆 Итого побед: {game_state['wins']}"
                 # Добавляем только кнопку завершения
                 builder.button(text="🏁 Завершить игру", callback_data=f"burmalda_finish_{user_id}")
                 builder.adjust(1)
