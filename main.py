@@ -8,7 +8,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from config import API_TOKEN, CHANNEL_CHAT_ID
+from config import API_TOKEN
 from handlers import router
 from middleware import AntiSpamMiddleware
 from model import Chat_listModel, db
@@ -38,15 +38,13 @@ async def notify_all_chats(bot: Bot, text: str):
 
 async def send_channel_message(bot: Bot, text: str) -> None:
     """Отправка сообщения в канал с обработкой ошибок."""
-    if not CHANNEL_CHAT_ID:
-        logger.error("CHANNEL_CHAT_ID не установлен в config.py!")
-        return
     try:
-        await bot.send_message(CHANNEL_CHAT_ID, text)
+        # Отправляем уведомление во все чаты из базы данных
+        await notify_all_chats(bot, text)
     except Exception as e:
-        logger.error(f"Не удалось отправить сообщение в канал: {e}")
+        logger.error(f"Не удалось отправить сообщение в чаты: {e}")
 
-async def auto_task(bot: Bot, chat_id: int):
+async def auto_task(bot: Bot):
     """Планировщик для задач в 18:00 по МСК."""
     while True:
         try:
@@ -68,9 +66,16 @@ async def auto_task(bot: Bot, chat_id: int):
             delay = (next_run - now).total_seconds()
             await asyncio.sleep(delay)
             
-            # Начисляем награды
-            await award_size_top_exp(bot, chat_id)
-            await kick_for_unactive(bot, chat_id)
+            # Получаем все чаты из базы данных
+            chat_ids = [chat.chat_id for chat in Chat_listModel.select(Chat_listModel.chat_id)]
+            
+            # Начисляем награды для каждого чата
+            for chat_id in chat_ids:
+                try:
+                    await award_size_top_exp(bot, chat_id)
+                    await kick_for_unactive(bot, chat_id)
+                except Exception as e:
+                    logger.error(f"Ошибка при обработке чата {chat_id}: {e}")
             
         except Exception as e:
             logger.error(f"Ошибка в планировщике наград: {e}")
@@ -114,7 +119,7 @@ async def main() -> None:
     await send_channel_message(bot, "🤖 Бот запущен и готов к работе!")
     
     # Запускаем планировщик наград
-    asyncio.create_task(auto_task(bot, CHANNEL_CHAT_ID))
+    asyncio.create_task(auto_task(bot))
     
     try:
         await dp.start_polling(bot, shutdown_event=stop_event)

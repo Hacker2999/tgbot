@@ -63,7 +63,7 @@ class BurmaldaGame:
     def __init__(self):
         self.active_games: Dict[int, Dict] = {}  # user_id -> game_state
         
-    async def check_and_give_daily_credits(self, user_id: int) -> int:
+    async def check_and_give_daily_credits(self, user_id: int, chat_id: int) -> int:
         """
         Проверяет и выдает ежедневные кредиты пользователю.
         Возвращает количество выданных кредитов.
@@ -75,7 +75,10 @@ class BurmaldaGame:
             q = (
                 User_listModel
                 .select()
-                .where(User_listModel.user_id == user_id)
+                .where(
+                    User_listModel.chat_id == chat_id,
+                    User_listModel.user_id == user_id
+                )
                 .first()
             )
             
@@ -85,6 +88,7 @@ class BurmaldaGame:
                     User_listModel
                     .insert({
                         User_listModel.created_at: fn.now(),
+                        User_listModel.chat_id: chat_id,
                         User_listModel.user_id: user_id,
                         User_listModel.credits: DAILY_CREDITS,
                         User_listModel.last_credits_date: today,
@@ -102,13 +106,17 @@ class BurmaldaGame:
                         User_listModel.credits: User_listModel.credits + DAILY_CREDITS,
                         User_listModel.last_credits_date: today
                     })
-                    .where(User_listModel.user_id == user_id)
+                    .where(
+                        User_listModel.chat_id == chat_id,
+                        User_listModel.user_id == user_id
+                    )
                 ).execute()
                 
                 # Записываем в историю
                 (
                     CreditsHistoryModel
                     .insert({
+                        CreditsHistoryModel.chat_id: chat_id,
                         CreditsHistoryModel.user_id: user_id,
                         CreditsHistoryModel.credits_amount: DAILY_CREDITS,
                         CreditsHistoryModel.issued_date: today,
@@ -121,30 +129,36 @@ class BurmaldaGame:
                 return 0
                 
         except Exception as e:
-            logger.error(f"Ошибка при выдаче ежедневных кредитов для user_id {user_id}: {e}")
+            logger.error(f"Ошибка при выдаче ежедневных кредитов для user_id {user_id} в чате {chat_id}: {e}")
             return 0
     
-    def get_user_credits(self, user_id: int) -> int:
+    def get_user_credits(self, user_id: int, chat_id: int) -> int:
         """Получает количество кредитов пользователя"""
         try:
             q = (
                 User_listModel
                 .select(User_listModel.credits)
-                .where(User_listModel.user_id == user_id)
+                .where(
+                    User_listModel.chat_id == chat_id,
+                    User_listModel.user_id == user_id
+                )
                 .first()
             )
             return q.credits if q else 0
         except Exception as e:
-            logger.error(f"Ошибка при получении кредитов для user_id {user_id}: {e}")
+            logger.error(f"Ошибка при получении кредитов для user_id {user_id} в чате {chat_id}: {e}")
             return 0
     
-    def spend_credits(self, user_id: int, amount: int) -> bool:
+    def spend_credits(self, user_id: int, chat_id: int, amount: int) -> bool:
         """Тратит кредиты пользователя. Возвращает True если успешно"""
         try:
             q = (
                 User_listModel
                 .select(User_listModel.credits)
-                .where(User_listModel.user_id == user_id)
+                .where(
+                    User_listModel.chat_id == chat_id,
+                    User_listModel.user_id == user_id
+                )
                 .first()
             )
             if not q or q.credits < amount:
@@ -155,14 +169,17 @@ class BurmaldaGame:
                 .update({
                     User_listModel.credits: User_listModel.credits - amount
                 })
-                .where(User_listModel.user_id == user_id)
+                .where(
+                    User_listModel.chat_id == chat_id,
+                    User_listModel.user_id == user_id
+                )
             ).execute()
             return True
         except Exception as e:
-            logger.error(f"Ошибка при трате кредитов для user_id {user_id}: {e}")
+            logger.error(f"Ошибка при трате кредитов для user_id {user_id} в чате {chat_id}: {e}")
             return False
     
-    def add_bonus_exp(self, user_id: int, amount: int) -> bool:
+    def add_bonus_exp(self, user_id: int, chat_id: int, amount: int) -> bool:
         """Добавляет бонусный опыт пользователю"""
         try:
             (
@@ -170,11 +187,14 @@ class BurmaldaGame:
                 .update({
                     User_listModel.bonus_exp: User_listModel.bonus_exp + amount
                 })
-                .where(User_listModel.user_id == user_id)
+                .where(
+                    User_listModel.chat_id == chat_id,
+                    User_listModel.user_id == user_id
+                )
             ).execute()
             return True
         except Exception as e:
-            logger.error(f"Ошибка при добавлении бонусного опыта для user_id {user_id}: {e}")
+            logger.error(f"Ошибка при добавлении бонусного опыта для user_id {user_id} в чате {chat_id}: {e}")
             return False
     
     def get_commission_rate(self, user_level: int) -> float:
@@ -184,7 +204,7 @@ class BurmaldaGame:
         commission -= level_reductions * COMMISSION_REDUCTION_PER_5_LEVELS
         return max(commission, 0.05)  # Минимальная комиссия 5%
     
-    async def play_roulette_game(self, user_id: int, dice_value: int = None) -> GameResult:
+    async def play_roulette_game(self, user_id: int, chat_id: int, dice_value: int = None) -> GameResult:
         """Игра в рулетку (переделанная под очки)"""
         try:
             # Бот выбирает условие
@@ -214,10 +234,10 @@ class BurmaldaGame:
             )
             
         except Exception as e:
-            logger.error(f"Ошибка в игре рулетка для user_id {user_id}: {e}")
+            logger.error(f"Ошибка в игре рулетка для user_id {user_id} в чате {chat_id}: {e}")
             return GameResult(won=False, message="❌ Ошибка в игре")
     
-    async def play_slot_game(self, user_id: int, slot_value: int = None) -> GameResult:
+    async def play_slot_game(self, user_id: int, chat_id: int, slot_value: int = None) -> GameResult:
         """Игра в слоты"""
         try:
             symbols = ["🍎", "🍊", "🍇", "🍒", "🍓", "🍉"]
@@ -246,10 +266,10 @@ class BurmaldaGame:
             )
             
         except Exception as e:
-            logger.error(f"Ошибка в игре слоты для user_id {user_id}: {e}")
+            logger.error(f"Ошибка в игре слоты для user_id {user_id} в чате {chat_id}: {e}")
             return GameResult(won=False, message="❌ Ошибка в игре")
     
-    async def play_blackjack_game(self, user_id: int) -> GameResult:
+    async def play_blackjack_game(self, user_id: int, chat_id: int) -> GameResult:
         """Игра в Блэкджек"""
         try:
             # Колода карт (2-10, J, Q, K, A)
@@ -257,45 +277,51 @@ class BurmaldaGame:
             aces = [11]  # Туз = 11 (будем корректировать при необходимости)
             
             # Раздаем карты игроку
-            player_cards = [random.choice(cards), random.choice(cards)]
-            if random.random() < 0.25:  # 25% шанс получить туза
-                player_cards.append(random.choice(aces))
+            player_cards = [random.choice(cards + aces), random.choice(cards + aces)]
+            dealer_cards = [random.choice(cards + aces), random.choice(cards + aces)]
             
-            # Раздаем карты дилеру
-            dealer_cards = [random.choice(cards), random.choice(cards)]
-            if random.random() < 0.25:  # 25% шанс получить туза
-                dealer_cards.append(random.choice(aces))
-            
-            # Рассчитываем очки
+            # Считаем очки игрока
             player_score = sum(player_cards)
-            dealer_score = sum(dealer_cards)
-            
-            # Корректируем тузы если нужно (если больше 21, то туз = 1)
             while player_score > 21 and 11 in player_cards:
                 player_cards[player_cards.index(11)] = 1
                 player_score = sum(player_cards)
             
+            # Считаем очки дилера
+            dealer_score = sum(dealer_cards)
             while dealer_score > 21 and 11 in dealer_cards:
                 dealer_cards[dealer_cards.index(11)] = 1
                 dealer_score = sum(dealer_cards)
             
-            # Определяем победителя
-            won = False
-            if player_score <= 21:
-                if dealer_score > 21 or player_score > dealer_score:
-                    won = True
+            # Дилер доигрывает до 17
+            while dealer_score < 17:
+                new_card = random.choice(cards + aces)
+                dealer_cards.append(new_card)
+                dealer_score = sum(dealer_cards)
+                while dealer_score > 21 and 11 in dealer_cards:
+                    dealer_cards[dealer_cards.index(11)] = 1
+                    dealer_score = sum(dealer_cards)
             
-            # Формируем сообщение
-            player_cards_str = ", ".join(map(str, player_cards))
-            dealer_cards_str = ", ".join(map(str, dealer_cards))
+            # Определяем победителя
+            if player_score > 21:
+                won = False
+                result_text = "❌ Перебор! Вы проиграли."
+            elif dealer_score > 21 or player_score > dealer_score:
+                won = True
+                result_text = "🎉 Победа!"
+            elif player_score == dealer_score:
+                won = False
+                result_text = "🤝 Ничья!"
+            else:
+                won = False
+                result_text = "❌ Проигрыш."
             
             message = (
                 f"🃏 <b>Блэкджек</b>\n\n"
-                f"Ваши карты: {player_cards_str}\n"
+                f"Ваши карты: {', '.join(map(str, player_cards))}\n"
                 f"Ваши очки: <b>{player_score}</b>\n\n"
-                f"Карты дилера: {dealer_cards_str}\n"
+                f"Карты дилера: {', '.join(map(str, dealer_cards))}\n"
                 f"Очки дилера: <b>{dealer_score}</b>\n\n"
-                f"{'🎉 Победа!' if won else '❌ Проигрыш'}"
+                f"{result_text}"
             )
             
             return GameResult(
@@ -306,93 +332,108 @@ class BurmaldaGame:
             )
             
         except Exception as e:
-            logger.error(f"Ошибка в игре Блэкджек для user_id {user_id}: {e}")
+            logger.error(f"Ошибка в игре блэкджек для user_id {user_id} в чате {chat_id}: {e}")
             return GameResult(won=False, message="❌ Ошибка в игре")
     
-    def create_main_menu(self, user_id: int) -> Tuple[str, InlineKeyboardMarkup]:
+    def create_main_menu(self, user_id: int, chat_id: int) -> Tuple[str, InlineKeyboardMarkup]:
         """Создает главное меню Burmalda"""
-        credits = self.get_user_credits(user_id)
-        
-        text = (
-            f"🎮 <b>Burmalda - Игровая система</b>\n\n"
-            f"💰 Отвальчики: <b>{credits}</b>\n"
-            f"🎯 Стоимость игры: <b>{GAME_COST}</b> отвальчиков за 3 попытки\n\n"
-            f"🏅 <b>Награды за победы:</b>\n"
-            f"• 1 победа: {ATTEMPT_REWARDS[1]} отвальчиков\n"
-            f"• 2 победы: {ATTEMPT_REWARDS[2]} отвальчиков\n"
-            f"• 3 победы: {ATTEMPT_REWARDS[3]} отвальчиков\n\n"
-            f"Выберите игру или действие:"
-        )
-        
-        builder = InlineKeyboardBuilder()
-        builder.button(text="🎲 Рулетка", callback_data=f"burmalda_game_roulette_{user_id}")
-        builder.button(text="🎰 Слоты", callback_data=f"burmalda_game_slot_{user_id}")
-        builder.button(text="🃏 Блэкджек", callback_data=f"burmalda_game_blackjack_{user_id}")
-        builder.button(text="🏪 Магазин", callback_data=f"burmalda_shop_{user_id}")
-        builder.adjust(2, 1, 1)
-        
-        return text, builder.as_markup()
+        try:
+            credits = self.get_user_credits(user_id, chat_id)
+            
+            text = (
+                f"🎮 <b>Игровая система Burmalda</b>\n\n"
+                f"💰 Ваши отвальчики: <b>{credits}</b>\n\n"
+                f"🎲 <b>Игры (30 отвальчиков):</b>\n"
+                f"• Рулетка - угадайте больше/меньше\n"
+                f"• Слоты - 3 попытки на джекпот\n"
+                f"• Блэкджек - классическая карточная игра\n\n"
+                f"🏆 <b>Награды за победы:</b>\n"
+                f"• 1 победа: 15 отвальчиков + 30 опыта\n"
+                f"• 2 победы: 35 отвальчиков + 60 опыта\n"
+                f"• 3 победы: 60 отвальчиков + 90 опыта\n\n"
+                f"💡 Ежедневно получайте 100 отвальчиков!"
+            )
+            
+            builder = InlineKeyboardBuilder()
+            builder.button(text="🎲 Рулетка", callback_data=f"burmalda_game_roulette_{user_id}")
+            builder.button(text="🎰 Слоты", callback_data=f"burmalda_game_slot_{user_id}")
+            builder.button(text="🃏 Блэкджек", callback_data=f"burmalda_game_blackjack_{user_id}")
+            builder.button(text="🛒 Магазин", callback_data=f"burmalda_shop_{user_id}")
+            builder.adjust(2, 2)
+            
+            return text, builder.as_markup()
+            
+        except Exception as e:
+            logger.error(f"Ошибка при создании главного меню для user_id {user_id} в чате {chat_id}: {e}")
+            return "❌ Ошибка при создании меню", InlineKeyboardBuilder().as_markup()
     
-    def create_shop_menu(self, user_id: int) -> Tuple[str, InlineKeyboardMarkup]:
-        """Создает меню магазина"""
-        credits = self.get_user_credits(user_id)
-        
-        q = (
-            User_listModel
-            .select(User_listModel.warn_count, User_listModel.rank)
-            .where(User_listModel.user_id == user_id)
-            .first()
-        )
-        
-        warn_count = q.warn_count if q else 0
-        level = q.rank if q else 1
-        
-        commission = self.get_commission_rate(level)
-        exchange_rate = int(1 / commission)  # Сколько отвальчиков за 1 опыт
-        
-        text = (
-            f"🏪 <b>Магазин Burmalda</b>\n\n"
-            f"💰 Ваши отвальчики: <b>{credits}</b>\n"
-            f"⚠️ Предупреждения: <b>{warn_count}</b>\n"
-            f"📊 Уровень: <b>{level}</b>\n"
-            f"💱 Комиссия: <b>{commission*100:.0f}%</b>\n"
-            f"🔄 Курс обмена: <b>{exchange_rate}</b> отвальчиков = 1 опыт\n\n"
-            f"Выберите товар:"
-        )
-        
-        builder = InlineKeyboardBuilder()
-        if warn_count > 0:
-            builder.button(text=f"⚠️ Снять предупреждение ({WARN_REMOVAL_COST} отвальчиков)", 
-                          callback_data=f"burmalda_remove_warn_{user_id}")
-        builder.button(text=f"⭐ Обменять 100 отвальчиков на опыт", 
-                      callback_data=f"burmalda_exchange_exp_{user_id}")
-        builder.button(text="🔙 Назад", callback_data=f"burmalda_main_{user_id}")
-        builder.adjust(1)
-        
-        return text, builder.as_markup()
+    def create_shop_menu(self, user_id: int, chat_id: int) -> Tuple[str, InlineKeyboardMarkup]:
+        """Создает меню магазина Burmalda"""
+        try:
+            credits = self.get_user_credits(user_id, chat_id)
+            
+            # Получаем уровень пользователя для расчета комиссии
+            q = (
+                User_listModel
+                .select(User_listModel.rank)
+                .where(
+                    User_listModel.chat_id == chat_id,
+                    User_listModel.user_id == user_id
+                )
+                .first()
+            )
+            user_level = q.rank if q else 1
+            commission = self.get_commission_rate(user_level)
+            exp_per_100 = int(100 * (1 - commission))
+            
+            text = (
+                f"🛒 <b>Магазин Burmalda</b>\n\n"
+                f"💰 Ваши отвальчики: <b>{credits}</b>\n\n"
+                f"📦 <b>Товары:</b>\n"
+                f"• Снятие предупреждения: <b>{WARN_REMOVAL_COST}</b> отвальчиков\n"
+                f"• Обмен на опыт: <b>100</b> отвальчиков = <b>{exp_per_100}</b> опыта\n"
+                f"  (комиссия: {commission*100:.0f}%)\n\n"
+                f"💡 Комиссия уменьшается каждые 5 уровней!"
+            )
+            
+            builder = InlineKeyboardBuilder()
+            builder.button(text="⚠️ Снять предупреждение", callback_data=f"burmalda_remove_warn_{user_id}")
+            builder.button(text="⭐ Обмен на опыт", callback_data=f"burmalda_exchange_exp_{user_id}")
+            builder.button(text="🔙 Назад", callback_data=f"burmalda_main_{user_id}")
+            builder.adjust(1)
+            
+            return text, builder.as_markup()
+            
+        except Exception as e:
+            logger.error(f"Ошибка при создании меню магазина для user_id {user_id} в чате {chat_id}: {e}")
+            return "❌ Ошибка при создании меню магазина", InlineKeyboardBuilder().as_markup()
     
-    def get_user_points(self, user_id: int) -> int:
-        """Получает количество очков пользователя (используем отвальчики)"""
-        return self.get_user_credits(user_id)
+    # Алиасы для совместимости
+    def get_user_points(self, user_id: int, chat_id: int) -> int:
+        """Алиас для get_user_credits"""
+        return self.get_user_credits(user_id, chat_id)
     
-    def add_points(self, user_id: int, amount: int) -> bool:
-        """Добавляет очки пользователю (используем отвальчики)"""
+    def add_points(self, user_id: int, chat_id: int, amount: int) -> bool:
+        """Добавляет отвальчики пользователю"""
         try:
             (
                 User_listModel
                 .update({
                     User_listModel.credits: User_listModel.credits + amount
                 })
-                .where(User_listModel.user_id == user_id)
+                .where(
+                    User_listModel.chat_id == chat_id,
+                    User_listModel.user_id == user_id
+                )
             ).execute()
             return True
         except Exception as e:
-            logger.error(f"Ошибка при добавлении очков для user_id {user_id}: {e}")
+            logger.error(f"Ошибка при добавлении отвальчиков для user_id {user_id} в чате {chat_id}: {e}")
             return False
     
-    def spend_points(self, user_id: int, amount: int) -> bool:
-        """Тратит очки пользователя (используем отвальчики). Возвращает True если успешно"""
-        return self.spend_credits(user_id, amount)
+    def spend_points(self, user_id: int, chat_id: int, amount: int) -> bool:
+        """Алиас для spend_credits"""
+        return self.spend_credits(user_id, chat_id, amount)
 
-# Глобальный экземпляр игровой системы
+# Создаем глобальный экземпляр
 burmalda_game = BurmaldaGame() 

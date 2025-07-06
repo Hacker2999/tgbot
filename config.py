@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 API_TOKEN = "your_telegram_bot_token"
 RULES = "1. Уважать друг друга.\n2. Не флудить.\n3. Соблюдать законы."
 SPAM_LIMIT = 5  # Лимит одинаковых сообщений в минуту
-CHANNEL_CHAT_ID = "your_channel_chat_id"
 DB_NAME = "your_db_name"
 DB_USER = "your_db_user"
 DB_PASSWORD = "your_db_password"

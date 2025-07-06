@@ -1336,13 +1336,14 @@ async def burmalda_command(message: Message, bot: Bot) -> None:
             return
             
         user_id = message.from_user.id
+        chat_id = message.chat.id
         username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
         
         # Проверяем и выдаем ежедневные кредиты
-        daily_credits = await burmalda_game.check_and_give_daily_credits(user_id)
+        daily_credits = await burmalda_game.check_and_give_daily_credits(user_id, chat_id)
         
         # Создаем главное меню
-        text, markup = burmalda_game.create_main_menu(user_id)
+        text, markup = burmalda_game.create_main_menu(user_id, chat_id)
         
         # Добавляем информацию о ежедневных кредитах
         if daily_credits > 0:
@@ -1375,6 +1376,7 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             return
             
         action = data[1]
+        chat_id = call.message.chat.id
         
         if action == "main":
             # Главное меню
@@ -1385,7 +1387,7 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
                 await call.answer("❌ Это не ваше меню! Вызовите своё меню через /burmalda", show_alert=True)
                 return
                 
-            text, markup = burmalda_game.create_main_menu(user_id)
+            text, markup = burmalda_game.create_main_menu(user_id, chat_id)
             await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
             
         elif action == "shop":
@@ -1397,7 +1399,7 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
                 await call.answer("❌ Это не ваше меню! Вызовите своё меню через /burmalda", show_alert=True)
                 return
                 
-            text, markup = burmalda_game.create_shop_menu(user_id)
+            text, markup = burmalda_game.create_shop_menu(user_id, chat_id)
             await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
             
         elif action == "game":
@@ -1424,13 +1426,13 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
                     return
             else:
                 # Начинаем новую игру - проверяем кредиты
-                credits = burmalda_game.get_user_credits(user_id)
+                credits = burmalda_game.get_user_credits(user_id, chat_id)
                 if credits < GAME_COST:
                     await call.answer(f"❌ Недостаточно отвальчиков! Нужно: {GAME_COST}, у вас: {credits}", show_alert=True)
                     return
                     
                 # Тратим кредиты за всю игру
-                if not burmalda_game.spend_credits(user_id, GAME_COST):
+                if not burmalda_game.spend_credits(user_id, chat_id, GAME_COST):
                     await call.answer("❌ Ошибка при списании отвальчиков", show_alert=True)
                     return
                     
@@ -1475,7 +1477,7 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
                 await call.answer("❌ У вас нет предупреждений для снятия", show_alert=True)
                 return
                 
-            points = burmalda_game.get_user_points(user_id)
+            points = burmalda_game.get_user_points(user_id, chat_id)
             if points < WARN_REMOVAL_COST:
                 await call.answer(f"❌ Недостаточно отвальчиков! Нужно: {WARN_REMOVAL_COST}, у вас: {points}", show_alert=True)
                 return
@@ -1492,12 +1494,12 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
                 )
             ).execute()
             
-            burmalda_game.spend_points(user_id, WARN_REMOVAL_COST)
+            burmalda_game.spend_points(user_id, chat_id, WARN_REMOVAL_COST)
             
             await call.answer(f"✅ Предупреждение снято! Потрачено {WARN_REMOVAL_COST} отвальчиков", show_alert=True)
             
             # Обновляем меню магазина
-            text, markup = burmalda_game.create_shop_menu(user_id)
+            text, markup = burmalda_game.create_shop_menu(user_id, chat_id)
             await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
             
         elif action == "exchange":
@@ -1522,7 +1524,7 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             if not q:
                 await call.answer("❌ Пользователь не найден", show_alert=True)
                 return
-            points = burmalda_game.get_user_points(user_id)
+            points = burmalda_game.get_user_points(user_id, chat_id)
             if points < 100:
                 await call.answer(f"❌ Недостаточно отвальчиков! Нужно: 100, у вас: {points}", show_alert=True)
                 return
@@ -1530,11 +1532,11 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             commission = burmalda_game.get_commission_rate(q.rank)
             exp_gained = int(100 * (1 - commission))
             # Тратим отвальчики и начисляем опыт
-            burmalda_game.spend_points(user_id, 100)
+            burmalda_game.spend_points(user_id, chat_id, 100)
             await award_exp_and_check_level_up(user_id, exp_gained, 0, call.from_user.first_name, call.message, bot, call.message.chat.id)
             await call.answer(f"✅ Получено {exp_gained} опыта за 100 отвальчиков! Комиссия: {commission*100:.0f}%", show_alert=True)
             # Обновляем меню магазина
-            text, markup = burmalda_game.create_shop_menu(user_id)
+            text, markup = burmalda_game.create_shop_menu(user_id, chat_id)
             await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
             
         else:
@@ -1558,12 +1560,13 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
             return
             
         game_state["attempts"] += 1
+        chat_id = call.message.chat.id
         
         from aiogram.utils.keyboard import InlineKeyboardBuilder
         builder = InlineKeyboardBuilder()
         
         if game_type == "slot":
-            result = await burmalda_game.play_slot_game(user_id)
+            result = await burmalda_game.play_slot_game(user_id, chat_id)
             if result.won:
                 game_state["wins"] += 1
                 
@@ -1596,7 +1599,7 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
             game_state["messages"].append(new_message.message_id)
             
         elif game_type == "roulette":
-            result = await burmalda_game.play_roulette_game(user_id)
+            result = await burmalda_game.play_roulette_game(user_id, chat_id)
             if result.won:
                 game_state["wins"] += 1
                 
@@ -1685,6 +1688,7 @@ async def finish_burmalda_game(call: CallbackQuery, bot: Bot) -> None:
         logger.info(f"[finish_burmalda_game] Начало. user_id={call.from_user.id}, data={call.data}, chat_id={call.message.chat.id}")
         await call.answer()  # Сразу убираем "часики" у пользователя
         user_id = int(call.data.split("_")[2])
+        chat_id = call.message.chat.id
         logger.info(f"[finish_burmalda_game] user_id из callback: {user_id}")
         # Проверяем, что callback отправил тот же пользователь
         if call.from_user.id != user_id:
@@ -1710,11 +1714,11 @@ async def finish_burmalda_game(call: CallbackQuery, bot: Bot) -> None:
         # Начисляем отвальчики
         if points_earned > 0:
             logger.info(f"[finish_burmalda_game] Добавляю отвальчики: {points_earned}")
-            burmalda_game.add_points(user_id, points_earned)
+            burmalda_game.add_points(user_id, chat_id, points_earned)
         # Начисляем бонусный опыт за победы
         if bonus_exp_earned > 0:
             logger.info(f"[finish_burmalda_game] Добавляю бонусный опыт: {bonus_exp_earned}")
-            burmalda_game.add_bonus_exp(user_id, bonus_exp_earned)
+            burmalda_game.add_bonus_exp(user_id, chat_id, bonus_exp_earned)
         # Формируем итоговое сообщение
         if wins == 0:
             result_text = "😔 К сожалению, вы не выиграли ни одной попытки..."
@@ -1741,7 +1745,7 @@ async def finish_burmalda_game(call: CallbackQuery, bot: Bot) -> None:
         # Отправляем новое главное меню Burmalda
         try:
             logger.info(f"[finish_burmalda_game] Формирую главное меню для user_id={user_id}")
-            text, markup = burmalda_game.create_main_menu(user_id)
+            text, markup = burmalda_game.create_main_menu(user_id, chat_id)
             logger.info(f"[finish_burmalda_game] Главное меню сформировано. text={text[:50]}...")
             await bot.send_message(
                 chat_id=call.message.chat.id,
@@ -1989,7 +1993,7 @@ async def show_blackjack_final(call: CallbackQuery, bot: Bot, user_id: int, play
     # Применяем изменения к отвальчикам
     if credits_change != 0:
         if credits_change > 0:
-            burmalda_game.add_points(user_id, credits_change)
+            burmalda_game.add_points(user_id, call.message.chat.id, credits_change)
         else:
             # Для проигрыша просто не начисляем отвальчики (они уже потрачены при начале игры)
             pass
