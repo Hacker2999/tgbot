@@ -1532,7 +1532,9 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             commission = burmalda_game.get_commission_rate(q.rank)
             exp_gained = int(100 * (1 - commission))
             # Тратим отвальчики и начисляем опыт
-            burmalda_game.spend_points(user_id, chat_id, 100)
+            if not burmalda_game.spend_points(user_id, chat_id, 100):
+                await call.answer(f"❌ Не удалось списать отвальчики. Возможно, их недостаточно.", show_alert=True)
+                return
             await award_exp_and_check_level_up(user_id, exp_gained, 0, call.from_user.first_name, call.message, bot, call.message.chat.id)
             await call.answer(f"✅ Получено {exp_gained} опыта за 100 отвальчиков! Комиссия: {commission*100:.0f}%", show_alert=True)
             # Обновляем меню магазина
