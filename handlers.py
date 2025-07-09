@@ -1364,6 +1364,25 @@ async def burmalda_finish_callback(call: CallbackQuery, bot: Bot) -> None:
         return
     await finish_burmalda_game(call, bot)
 
+@router.callback_query(F.data.startswith("burmalda_transfer_"))
+async def burmalda_transfer_init(call: CallbackQuery, bot: Bot) -> None:
+    user_id = int(call.data.split("_")[-1])
+    if call.from_user.id != user_id:
+        await call.answer("❌ Это не ваше меню!", show_alert=True)
+        return
+    chat_id = call.message.chat.id
+    # Сохраняем состояние ожидания ответа
+    TRANSFER_CACHE[user_id] = {"step": "wait_reply", "chat_id": chat_id}
+    msg = await bot.send_message(
+        chat_id=chat_id,
+        text=(
+            "✉️ Ответьте на это сообщение тегом пользователя и количеством отвальчиков для передачи.\n"
+            "Пример: @username 100"
+        )
+    )
+    TRANSFER_CACHE[user_id]["msg_id"] = msg.message_id
+    await call.answer()
+
 @router.callback_query(F.data.startswith("burmalda_"))
 async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
     # Если это завершение игры, не обрабатываем здесь, а даём сработать finish_burmalda_game
