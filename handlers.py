@@ -1365,25 +1365,6 @@ async def burmalda_finish_callback(call: CallbackQuery, bot: Bot) -> None:
         return
     await finish_burmalda_game(call, bot)
 
-@router.callback_query(F.data.startswith("burmalda_transfer_"))
-async def burmalda_transfer_init(call: CallbackQuery, bot: Bot) -> None:
-    user_id = int(call.data.split("_")[-1])
-    if call.from_user.id != user_id:
-        await call.answer("❌ Это не ваше меню!", show_alert=True)
-        return
-    chat_id = call.message.chat.id
-    # Сохраняем состояние ожидания ответа
-    TRANSFER_CACHE[user_id] = {"step": "wait_reply", "chat_id": chat_id}
-    msg = await bot.send_message(
-        chat_id=chat_id,
-        text=(
-            "✉️ Ответьте на это сообщение тегом пользователя и количеством отвальчиков для передачи.\n"
-            "Пример: @username 100"
-        )
-    )
-    TRANSFER_CACHE[user_id]["msg_id"] = msg.message_id
-    await call.answer()
-
 @router.callback_query(F.data.startswith("burmalda_"))
 async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
     # Если это завершение игры, не обрабатываем здесь, а даём сработать finish_burmalda_game
@@ -2179,53 +2160,53 @@ async def process_rp_action(message: Message, bot: Bot) -> None:
     except Exception as e:
         logger.error(f"Ошибка при обработке RP-действия: {e}")
 
-# --- Кэш для передачи очков ---
-TRANSFER_CACHE = {}  # user_id: {"step": str, ...}
-
-@router.callback_query(F.data.startswith("burmalda_transfer_"))
-async def burmalda_transfer_init(call: CallbackQuery, bot: Bot) -> None:
-    user_id = int(call.data.split("_")[-1])
-    if call.from_user.id != user_id:
-        await call.answer("❌ Это не ваше меню!", show_alert=True)
-        return
-    chat_id = call.message.chat.id
-    # Сохраняем состояние ожидания ответа
-    TRANSFER_CACHE[user_id] = {"step": "wait_reply", "chat_id": chat_id}
-    msg = await bot.send_message(
-        chat_id=chat_id,
-        text=(
-            "✉️ Ответьте на это сообщение тегом пользователя и количеством отвальчиков для передачи.\n"
-            "Пример: @username 100"
-        )
-    )
-    TRANSFER_CACHE[user_id]["msg_id"] = msg.message_id
-    await call.answer()
-
-class IsTransferReply(Filter):
-    async def __call__(self, message: Message) -> bool:
-        user_id = message.from_user.id
-        if user_id in TRANSFER_CACHE:
-            state = TRANSFER_CACHE[user_id]
-            if state.get("step") == "wait_reply":
-                if message.reply_to_message and message.reply_to_message.message_id == state.get("msg_id"):
-                    return True
-        return False
-
-@router.message(IsTransferReply())
-async def handle_transfer_reply(message: Message, bot: Bot) -> None:
-    # ... (оставляю вашу логику и debug-логи)
-    user_id = message.from_user.id
-    import json
-    logger.info(f"[TRANSFER] user_id={user_id}, text={message.text}, entities={message.entities}, reply_to_message_id={getattr(message.reply_to_message, 'message_id', None)}")
-    state = TRANSFER_CACHE[user_id]
-    logger.info(f"[TRANSFER] state={state}")
-    debug_info = {
-        'user_id': user_id,
-        'text': message.text,
-        'entities': str(message.entities),
-        'reply_to_message_id': getattr(message.reply_to_message, 'message_id', None),
-        'expected_msg_id': state.get('msg_id'),
-        'state': state
-    }
-    await message.reply(f"DEBUG: {json.dumps(debug_info, ensure_ascii=False)}")
-    # ... (остальная логика handle_transfer_reply без изменений)
+@router.message(Command("transfer_otvalchiki"))
+async def transfer_otvalchiki_command(message: Message, bot: Bot) -> None:
+    import re
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        # Парсим аргументы
+        parts = message.text.strip().split()
+        if len(parts) != 3:
+            await message.reply("❌ Формат: /transfer_otvalchiki @username 100")
+            return
+        _, tag, amount_str = parts
+        if not amount_str.isdigit():
+            await message.reply("❌ Сумма должна быть числом")
+            return
+        amount = int(amount_str)
+        if amount <= 0:
+            await message.reply("❌ Сумма должна быть больше 0")
+            return
+        if not tag.startswith("@"): 
+            await message.reply("❌ Формат: /transfer_otvalchiki @username 100")
+            return
+        # Получаем user_id по username
+        username = tag[1:]
+        try:
+            member = await bot.get_chat_member(message.chat.id, username)
+            to_user_id = member.user.id
+        except Exception as e:
+            logger.error(f"[TRANSFER_CMD] Не удалось найти пользователя {username}: {e}")
+            await message.reply("❌ Не удалось найти пользователя по username")
+            return
+        from_user_id = message.from_user.id
+        if to_user_id == from_user_id:
+            await message.reply("❌ Нельзя переводить отвальчики самому себе")
+            return
+        # Проверяем баланс
+        if not burmalda_game.can_transfer_points(from_user_id, message.chat.id, amount):
+            await message.reply("❌ Недостаточно отвальчиков для перевода")
+            return
+        # Переводим
+        if not burmalda_game.transfer_points(from_user_id, to_user_id, message.chat.id, amount):
+            await message.reply("❌ Ошибка при переводе")
+            return
+        # Начисляем опыт отправителю (опционально)
+        await award_exp_and_check_level_up(from_user_id, amount, 0, message.from_user.first_name, message, bot, message.chat.id)
+        to_name = member.user.username or member.user.first_name
+        await message.reply(f"✅ <b>Успешно передано {amount} отвальчиков пользователю @{to_name}</b>", parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"[TRANSFER_CMD] Глобальная ошибка: {e}")
+        await message.reply("❌ Произошла ошибка при переводе")

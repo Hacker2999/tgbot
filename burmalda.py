@@ -399,7 +399,6 @@ class BurmaldaGame:
             builder = InlineKeyboardBuilder()
             builder.button(text="⚠️ Снять предупреждение", callback_data=f"burmalda_remove_warn_{user_id}")
             builder.button(text="⭐ Обмен на опыт", callback_data=f"burmalda_exchange_exp_{user_id}")
-            builder.button(text="🤝 Передать пользователю", callback_data=f"burmalda_transfer_{user_id}")
             builder.button(text="🔙 Назад", callback_data=f"burmalda_main_{user_id}")
             builder.adjust(1)
             
@@ -435,27 +434,6 @@ class BurmaldaGame:
     def spend_points(self, user_id: int, chat_id: int, amount: int) -> bool:
         """Алиас для spend_credits"""
         return self.spend_credits(user_id, chat_id, amount)
-
-    # --- Передача очков между пользователями ---
-    def can_transfer_points(self, from_user_id: int, chat_id: int, amount: int) -> bool:
-        """Проверяет, достаточно ли у пользователя очков для перевода"""
-        return self.get_user_credits(from_user_id, chat_id) >= amount
-
-    def transfer_points(self, from_user_id: int, to_user_id: int, chat_id: int, amount: int) -> bool:
-        """Переводит очки между пользователями. Возвращает True если успешно"""
-        if from_user_id == to_user_id or amount <= 0:
-            return False
-        if not self.can_transfer_points(from_user_id, chat_id, amount):
-            return False
-        try:
-            # Списываем у отправителя
-            self.spend_credits(from_user_id, chat_id, amount)
-            # Начисляем получателю
-            self.add_points(to_user_id, chat_id, amount)
-            return True
-        except Exception as e:
-            logger.error(f"Ошибка при переводе очков от {from_user_id} к {to_user_id} в чате {chat_id}: {e}")
-            return False
 
 # Создаем глобальный экземпляр
 burmalda_game = BurmaldaGame() 

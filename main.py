@@ -5,8 +5,6 @@ from typing import Optional
 from datetime import datetime, time, timedelta
 import pytz
 from aiogram import Bot, Dispatcher
-from aiogram.enums import ParseMode
-from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import API_TOKEN
 from handlers import router
