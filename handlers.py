@@ -732,6 +732,7 @@ async def help_command(message: Message) -> None:
         "<b>/anekdot</b> — Получить свежий анекдот (лимит: 3 в день)\n"
         "<b>/rules</b> — Показать правила чата\n"
         "<b>/links</b> — Список полезных ссылок с кнопками\n"
+        "<b>/tr_otval</b> — Перевести отвальчики другому пользователю (только ответом на сообщение: <code>/tr_otval 100</code>)\n"
         "<b>/help</b> — Это меню\n"
         "\n"
         "<b>🛠️ Админ-команды:</b>\n"
@@ -2160,38 +2161,25 @@ async def process_rp_action(message: Message, bot: Bot) -> None:
     except Exception as e:
         logger.error(f"Ошибка при обработке RP-действия: {e}")
 
-@router.message(Command("transfer_otvalchiki"))
+@router.message(Command("tr_otval"))
 async def transfer_otvalchiki_command(message: Message, bot: Bot) -> None:
-    import re
     import logging
     logger = logging.getLogger(__name__)
     try:
-        # Парсим аргументы
+        # Проверяем, что команда вызвана reply
+        if not message.reply_to_message:
+            await message.reply("❌ Используйте команду только ответом на сообщение пользователя, которому хотите перевести отвальчики.\nПример: /tr_otval 100 (ответом на сообщение)")
+            return
         parts = message.text.strip().split()
-        if len(parts) != 3:
-            await message.reply("❌ Формат: /transfer_otvalchiki @username 100")
+        if len(parts) != 2 or not parts[1].isdigit():
+            await message.reply("❌ Формат: /tr_otval 100 (ответом на сообщение)")
             return
-        _, tag, amount_str = parts
-        if not amount_str.isdigit():
-            await message.reply("❌ Сумма должна быть числом")
-            return
-        amount = int(amount_str)
+        amount = int(parts[1])
         if amount <= 0:
             await message.reply("❌ Сумма должна быть больше 0")
             return
-        if not tag.startswith("@"): 
-            await message.reply("❌ Формат: /transfer_otvalchiki @username 100")
-            return
-        # Получаем user_id по username
-        username = tag[1:]
-        try:
-            member = await bot.get_chat_member(message.chat.id, username)
-            to_user_id = member.user.id
-        except Exception as e:
-            logger.error(f"[TRANSFER_CMD] Не удалось найти пользователя {username}: {e}")
-            await message.reply("❌ Не удалось найти пользователя по username")
-            return
         from_user_id = message.from_user.id
+        to_user_id = message.reply_to_message.from_user.id
         if to_user_id == from_user_id:
             await message.reply("❌ Нельзя переводить отвальчики самому себе")
             return
@@ -2205,7 +2193,7 @@ async def transfer_otvalchiki_command(message: Message, bot: Bot) -> None:
             return
         # Начисляем опыт отправителю (опционально)
         await award_exp_and_check_level_up(from_user_id, amount, 0, message.from_user.first_name, message, bot, message.chat.id)
-        to_name = member.user.username or member.user.first_name
+        to_name = message.reply_to_message.from_user.username or message.reply_to_message.from_user.first_name
         await message.reply(f"✅ <b>Успешно передано {amount} отвальчиков пользователю @{to_name}</b>", parse_mode="HTML")
     except Exception as e:
         logger.error(f"[TRANSFER_CMD] Глобальная ошибка: {e}")
