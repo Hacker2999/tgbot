@@ -1575,6 +1575,7 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
         builder = InlineKeyboardBuilder()
         
         if game_type == "slot":
+            username = call.from_user.username if call.from_user.username is not None else call.from_user.first_name
             result = await burmalda_game.play_slot_game(user_id, chat_id)
             if result.won:
                 game_state["wins"] += 1
@@ -1609,6 +1610,7 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
             game_state["messages"].append(new_message.message_id)
             
         elif game_type == "roulette":
+            username = call.from_user.username if call.from_user.username is not None else call.from_user.first_name
             result = await burmalda_game.play_roulette_game(user_id, chat_id)
             if result.won:
                 game_state["wins"] += 1
@@ -1643,6 +1645,7 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
             game_state["messages"].append(new_message.message_id)
             
         elif game_type == "blackjack":
+            username = call.from_user.username if call.from_user.username is not None else call.from_user.first_name
             # --- Новый поэтапный блэкджек ---
             # Если первый запуск — раздаём карты
             if "player_cards" not in game_state:
@@ -1888,6 +1891,7 @@ async def blackjack_stand_callback(call: CallbackQuery, bot: Bot) -> None:
     await process_blackjack_stand(call, bot)
 
 async def process_blackjack_hit(call: CallbackQuery, bot: Bot) -> None:
+    username = call.from_user.username if call.from_user.username is not None else call.from_user.first_name
     user_id = int(call.data.split('_')[-1])
     game_state = burmalda_game.active_games.get(user_id)
     if not game_state or game_state.get("game_over"):
@@ -1971,6 +1975,7 @@ async def process_blackjack_stand(call: CallbackQuery, bot: Bot) -> None:
     await call.answer()
 
 async def show_blackjack_final(call: CallbackQuery, bot: Bot, user_id: int, player_bust: bool):
+    username = call.from_user.username if call.from_user.username is not None else call.from_user.first_name
     game_state = burmalda_game.active_games.get(user_id)
     player_cards = game_state["player_cards"]
     dealer_cards = game_state["dealer_cards"]
