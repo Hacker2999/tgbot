@@ -435,5 +435,22 @@ class BurmaldaGame:
         """Алиас для spend_credits"""
         return self.spend_credits(user_id, chat_id, amount)
 
+    def can_transfer_points(self, from_user_id: int, chat_id: int, amount: int) -> bool:
+        """Проверяет, достаточно ли у пользователя баланса для перевода."""
+        return self.get_user_credits(from_user_id, chat_id) >= amount
+
+    def transfer_points(self, from_user_id: int, to_user_id: int, chat_id: int, amount: int) -> bool:
+        """Переводит отвальчики от одного пользователя другому. Возвращает True, если успешно."""
+        if amount <= 0 or from_user_id == to_user_id:
+            return False
+        if not self.can_transfer_points(from_user_id, chat_id, amount):
+            return False
+        # Списываем у отправителя
+        if not self.spend_credits(from_user_id, chat_id, amount):
+            return False
+        # Начисляем получателю
+        self.add_points(to_user_id, chat_id, amount)
+        return True
+
 # Создаем глобальный экземпляр
 burmalda_game = BurmaldaGame() 
