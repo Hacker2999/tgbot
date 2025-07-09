@@ -1346,6 +1346,7 @@ async def burmalda_command(message: Message, bot: Bot) -> None:
         
         # Создаем главное меню
         text, markup = burmalda_game.create_main_menu(user_id, chat_id)
+        text = f"🎮 <b>Главное меню для: {username}</b>\n\n" + text
         
         # Добавляем информацию о ежедневных кредитах
         if daily_credits > 0:
@@ -1389,7 +1390,9 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
                 await call.answer("❌ Это не ваше меню! Вызовите своё меню через /burmalda", show_alert=True)
                 return
                 
+            username = call.from_user.username if call.from_user.username is not None else call.from_user.first_name
             text, markup = burmalda_game.create_main_menu(user_id, chat_id)
+            text = f"🎮 <b>Главное меню для: {username}</b>\n\n" + text
             await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
             
         elif action == "shop":
@@ -1401,7 +1404,9 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
                 await call.answer("❌ Это не ваше меню! Вызовите своё меню через /burmalda", show_alert=True)
                 return
                 
+            username = call.from_user.username if call.from_user.username is not None else call.from_user.first_name
             text, markup = burmalda_game.create_shop_menu(user_id, chat_id)
+            text = f"🎮 <b>Магазин для: {username}</b>\n\n" + text
             await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
             
         elif action == "game":
@@ -1594,9 +1599,10 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
                 builder.adjust(1)
             
             # Отправляем результат с информацией о попытках
+            username = call.from_user.username if call.from_user.username is not None else call.from_user.first_name
             new_message = await bot.send_message(
                 chat_id=call.message.chat.id,
-                text=result.message + attempts_info,
+                text=f"🎮 <b>Игра для: {username}</b>\n\n" + result.message + attempts_info,
                 reply_markup=builder.as_markup(),
                 parse_mode="HTML"
             )
@@ -1627,9 +1633,10 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
                 builder.adjust(1)
             
             # Отправляем результат с информацией о попытках
+            username = call.from_user.username if call.from_user.username is not None else call.from_user.first_name
             new_message = await bot.send_message(
                 chat_id=call.message.chat.id,
-                text=result.message + attempts_info,
+                text=f"🎮 <b>Игра для: {username}</b>\n\n" + result.message + attempts_info,
                 reply_markup=builder.as_markup(),
                 parse_mode="HTML"
             )
@@ -1663,6 +1670,7 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
             # Сообщение
             player_cards_str = ", ".join(map(str, player_cards))
             text = (
+                f"🎮 <b>Игра для: {username}</b>\n\n"
                 f"🃏 <b>Блэкджек</b>\n\n"
                 f"Ваши карты: {player_cards_str}\n"
                 f"Ваши очки: <b>{player_score}</b>\n\n"
@@ -1910,6 +1918,7 @@ async def process_blackjack_hit(call: CallbackQuery, bot: Bot) -> None:
     builder.adjust(2)
     player_cards_str = ", ".join(map(str, player_cards))
     text = (
+        f"🎮 <b>Игра для: {username}</b>\n\n"
         f"🃏 <b>Блэкджек</b>\n\n"
         f"Ваши карты: {player_cards_str}\n"
         f"Ваши очки: <b>{player_score}</b>\n\n"
@@ -2012,6 +2021,7 @@ async def show_blackjack_final(call: CallbackQuery, bot: Bot, user_id: int, play
         credits_text = f"\n🤝 Ничья: 0 отвальчиков"
     
     text = (
+        f"🎮 <b>Игра для: {username}</b>\n\n"
         f"🃏 <b>Блэкджек</b>\n\n"
         f"Ваши карты: {player_cards_str}\n"
         f"Ваши очки: <b>{player_score}</b>\n\n"
