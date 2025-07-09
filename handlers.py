@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 from typing import Optional, Dict, List, Tuple
 from functools import lru_cache
+import json
 
 from aiogram import Router, Bot, F
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberUpdated, BotCommand, MenuButtonCommands, ChatPermissions, CallbackQuery
@@ -2203,13 +2204,29 @@ async def burmalda_transfer_init(call: CallbackQuery, bot: Bot) -> None:
 @router.message()
 async def handle_transfer_reply(message: Message, bot: Bot) -> None:
     user_id = message.from_user.id
+    import json
+    logger.info(f"[TRANSFER] user_id={user_id}, text={message.text}, entities={message.entities}, reply_to_message_id={getattr(message.reply_to_message, 'message_id', None)}")
     if user_id not in TRANSFER_CACHE:
+        logger.info(f"[TRANSFER] user_id {user_id} not in TRANSFER_CACHE")
         return  # Не в процессе передачи
     state = TRANSFER_CACHE[user_id]
+    logger.info(f"[TRANSFER] state={state}")
+    # Отправляем debug-информацию в чат для диагностики
+    debug_info = {
+        'user_id': user_id,
+        'text': message.text,
+        'entities': str(message.entities),
+        'reply_to_message_id': getattr(message.reply_to_message, 'message_id', None),
+        'expected_msg_id': state.get('msg_id'),
+        'state': state
+    }
+    await message.reply(f"DEBUG: {json.dumps(debug_info, ensure_ascii=False)}")
     if state.get("step") != "wait_reply":
+        logger.info(f"[TRANSFER] state.step != wait_reply")
         return
     # Проверяем, что это reply на сообщение бота
     if not message.reply_to_message or message.reply_to_message.message_id != state.get("msg_id"):
+        logger.info(f"[TRANSFER] reply_to_message check failed")
         return
     # Парсим тег и количество
     parts = message.text.strip().split()
