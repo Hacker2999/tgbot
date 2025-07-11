@@ -732,7 +732,6 @@ async def help_command(message: Message) -> None:
         "<b>/anekdot</b> — Получить свежий анекдот (лимит: 3 в день)\n"
         "<b>/rules</b> — Показать правила чата\n"
         "<b>/links</b> — Список полезных ссылок с кнопками\n"
-        "<b>/tr_otval</b> — Перевести отвальчики другому пользователю (только ответом на сообщение: <code>/tr_otval 100</code>)\n"
         "<b>/help</b> — Это меню\n"
         "\n"
         "<b>🛠️ Админ-команды:</b>\n"
@@ -1558,6 +1557,7 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
 async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_type: str) -> None:
     """Начинает игру в Burmalda"""
     try:
+        username = call.from_user.username if call.from_user.username is not None else call.from_user.first_name
         game_state = burmalda_game.active_games.get(user_id)
         if not game_state:
             await call.answer("❌ Игра не найдена", show_alert=True)
@@ -1600,7 +1600,7 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
                 builder.adjust(1)
             
             # Отправляем результат с информацией о попытках
-            username = call.from_user.username if call.from_user.username is not None else call.from_user.first_name
+
             new_message = await bot.send_message(
                 chat_id=call.message.chat.id,
                 text=f"🎮 <b>Игра для: {username}</b>\n\n" + result.message + attempts_info,
@@ -1761,6 +1761,8 @@ async def finish_burmalda_game(call: CallbackQuery, bot: Bot) -> None:
         try:
             logger.info(f"[finish_burmalda_game] Формирую главное меню для user_id={user_id}")
             text, markup = burmalda_game.create_main_menu(user_id, chat_id)
+            username = call.from_user.username if call.from_user.username is not None else call.from_user.first_name
+            text = f"🎮 <b>Главное меню для: {username}</b>\n\n" + text
             logger.info(f"[finish_burmalda_game] Главное меню сформировано. text={text[:50]}...")
             await bot.send_message(
                 chat_id=call.message.chat.id,
@@ -1781,6 +1783,43 @@ async def finish_burmalda_game(call: CallbackQuery, bot: Bot) -> None:
         logger.error(f"[finish_burmalda_game] Глобальная ошибка: {e}")
         await call.answer("❌ Ошибка при завершении игры", show_alert=True)
 
+@router.message(Command("tr_otval"))
+async def transfer_otvalchiki_command(message: Message, bot: Bot) -> None:
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        # Проверяем, что команда вызвана reply
+        if not message.reply_to_message:
+            await message.reply("❌ Используйте команду только ответом на сообщение пользователя, которому хотите перевести отвальчики.\nПример: /tr_otval 100 (ответом на сообщение)")
+            return
+        parts = message.text.strip().split()
+        if len(parts) != 2 or not parts[1].isdigit():
+            await message.reply("❌ Формат: /tr_otval 100 (ответом на сообщение)")
+            return
+        amount = int(parts[1])
+        if amount <= 0:
+            await message.reply("❌ Сумма должна быть больше 0")
+            return
+        from_user_id = message.from_user.id
+        to_user_id = message.reply_to_message.from_user.id
+        if to_user_id == from_user_id:
+            await message.reply("❌ Нельзя переводить отвальчики самому себе")
+            return
+        # Проверяем баланс
+        if not burmalda_game.can_transfer_points(from_user_id, message.chat.id, amount):
+            await message.reply("❌ Недостаточно отвальчиков для перевода")
+            return
+        # Переводим
+        if not burmalda_game.transfer_points(from_user_id, to_user_id, message.chat.id, amount):
+            await message.reply("❌ Ошибка при переводе")
+            return
+        # Начисляем опыт отправителю (опционально)
+        await award_exp_and_check_level_up(from_user_id, amount, 0, message.from_user.first_name, message, bot, message.chat.id)
+        to_name = message.reply_to_message.from_user.username or message.reply_to_message.from_user.first_name
+        await message.reply(f"✅ <b>Успешно передано {amount} отвальчиков пользователю @{to_name}</b>", parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"[TRANSFER_CMD] Глобальная ошибка: {e}")
+        await message.reply("❌ Произошла ошибка при переводе")
 
 # --- Обработчики событий ---
 
@@ -2176,40 +2215,3 @@ async def process_rp_action(message: Message, bot: Bot) -> None:
     except Exception as e:
         logger.error(f"Ошибка при обработке RP-действия: {e}")
 
-@router.message(Command("tr_otval"))
-async def transfer_otvalchiki_command(message: Message, bot: Bot) -> None:
-    import logging
-    logger = logging.getLogger(__name__)
-    try:
-        # Проверяем, что команда вызвана reply
-        if not message.reply_to_message:
-            await message.reply("❌ Используйте команду только ответом на сообщение пользователя, которому хотите перевести отвальчики.\nПример: /tr_otval 100 (ответом на сообщение)")
-            return
-        parts = message.text.strip().split()
-        if len(parts) != 2 or not parts[1].isdigit():
-            await message.reply("❌ Формат: /tr_otval 100 (ответом на сообщение)")
-            return
-        amount = int(parts[1])
-        if amount <= 0:
-            await message.reply("❌ Сумма должна быть больше 0")
-            return
-        from_user_id = message.from_user.id
-        to_user_id = message.reply_to_message.from_user.id
-        if to_user_id == from_user_id:
-            await message.reply("❌ Нельзя переводить отвальчики самому себе")
-            return
-        # Проверяем баланс
-        if not burmalda_game.can_transfer_points(from_user_id, message.chat.id, amount):
-            await message.reply("❌ Недостаточно отвальчиков для перевода")
-            return
-        # Переводим
-        if not burmalda_game.transfer_points(from_user_id, to_user_id, message.chat.id, amount):
-            await message.reply("❌ Ошибка при переводе")
-            return
-        # Начисляем опыт отправителю (опционально)
-        await award_exp_and_check_level_up(from_user_id, amount, 0, message.from_user.first_name, message, bot, message.chat.id)
-        to_name = message.reply_to_message.from_user.username or message.reply_to_message.from_user.first_name
-        await message.reply(f"✅ <b>Успешно передано {amount} отвальчиков пользователю @{to_name}</b>", parse_mode="HTML")
-    except Exception as e:
-        logger.error(f"[TRANSFER_CMD] Глобальная ошибка: {e}")
-        await message.reply("❌ Произошла ошибка при переводе")
