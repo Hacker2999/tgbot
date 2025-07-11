@@ -1838,7 +1838,10 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
 
         user_id = message.from_user.id
 
-        # Обновляем/создаем запись пользователя
+        # СНАЧАЛА streak!
+        is_new_day, streak = check_visit_streak(user_id, message.chat.id)
+
+        # Теперь обновляем/создаем запись пользователя (last_visit и message_count)
         (
             User_listModel
             .insert({
@@ -1877,7 +1880,6 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
         bonus_exp_to_award = 0
 
         # Проверяем винстрик
-        is_new_day, streak = check_visit_streak(user_id, message.chat.id)
         if is_new_day and streak > 1:
             # Начисляем опыт за винстрик
             streak_exp = 10 * streak

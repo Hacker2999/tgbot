@@ -487,7 +487,7 @@ async def award_exp_and_check_level_up(user_id: int, level_exp_amount: int, bonu
             exp_for_next = calculate_exp_for_level(new_level + 1)
         
         # Если уровень повысится и есть объект сообщения
-        if new_level > current_rank and message is not None:
+        if new_level > current_rank:
             new_rank = get_user_rank(new_level)
             level_up_message = (
                 f"🎉 <b>Поздравляем, {username}!</b>\n\n"
@@ -496,7 +496,13 @@ async def award_exp_and_check_level_up(user_id: int, level_exp_amount: int, bonu
                 f"⭐ Опыт: <b>{new_total_exp}</b>\n\n"
                 f"Продолжайте быть активными! 🚀"
             )
-            await message.reply(level_up_message, parse_mode="HTML")
+            if message is not None:
+                await message.reply(level_up_message, parse_mode="HTML")
+            elif bot is not None and chat_id is not None:
+                try:
+                    await bot.send_message(chat_id, level_up_message, parse_mode="HTML")
+                except Exception as e:
+                    logger.error(f"Ошибка при отправке поздравления с уровнем через bot.send_message: {e}")
         
         # Начисляем опыт и обновляем уровень
         User_listModel.update({
