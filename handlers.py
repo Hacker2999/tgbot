@@ -1340,6 +1340,20 @@ async def burmalda_command(message: Message, bot: Bot) -> None:
         chat_id = message.chat.id
         username = message.from_user.username if message.from_user.username is not None else message.from_user.first_name
         
+        # Проверяем, есть ли активная игра и завершаем её
+        game_state = burmalda_game.active_games.get(user_id)
+        if game_state:
+            # Удаляем все сообщения игры
+            for msg_id in game_state["messages"]:
+                try:
+                    await bot.delete_message(chat_id, msg_id)
+                except Exception as e:
+                    logger.error(f"Не удалось удалить сообщение игры {msg_id}: {e}")
+            
+            # Очищаем состояние игры
+            del burmalda_game.active_games[user_id]
+            logger.info(f"Активная игра завершена для user_id {user_id} при вызове команды /burmalda")
+        
         # Проверяем и выдаем ежедневные кредиты
         daily_credits = await burmalda_game.check_and_give_daily_credits(user_id, chat_id)
         
@@ -1388,6 +1402,20 @@ async def burmalda_callback(call: CallbackQuery, bot: Bot) -> None:
             if call.from_user.id != user_id:
                 await call.answer("❌ Это не ваше меню! Вызовите своё меню через /burmalda", show_alert=True)
                 return
+            
+            # Проверяем, есть ли активная игра и завершаем её
+            game_state = burmalda_game.active_games.get(user_id)
+            if game_state:
+                # Удаляем все сообщения игры
+                for msg_id in game_state["messages"]:
+                    try:
+                        await bot.delete_message(chat_id, msg_id)
+                    except Exception as e:
+                        logger.error(f"Не удалось удалить сообщение игры {msg_id}: {e}")
+                
+                # Очищаем состояние игры
+                del burmalda_game.active_games[user_id]
+                logger.info(f"Активная игра завершена для user_id {user_id} при переходе в главное меню")
                 
             username = call.from_user.username if call.from_user.username is not None else call.from_user.first_name
             text, markup = burmalda_game.create_main_menu(user_id, chat_id)
