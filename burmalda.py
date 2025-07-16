@@ -179,24 +179,6 @@ class BurmaldaGame:
             logger.error(f"Ошибка при трате кредитов для user_id {user_id} в чате {chat_id}: {e}")
             return False
     
-    def add_bonus_exp(self, user_id: int, chat_id: int, amount: int) -> bool:
-        """Добавляет бонусный опыт пользователю"""
-        try:
-            (
-                User_listModel
-                .update({
-                    User_listModel.bonus_exp: User_listModel.bonus_exp + amount
-                })
-                .where(
-                    User_listModel.chat_id == chat_id,
-                    User_listModel.user_id == user_id
-                )
-            ).execute()
-            return True
-        except Exception as e:
-            logger.error(f"Ошибка при добавлении бонусного опыта для user_id {user_id} в чате {chat_id}: {e}")
-            return False
-    
     def get_commission_rate(self, user_level: int) -> float:
         """Рассчитывает комиссию за обмен отвальчиков на опыт в зависимости от уровня"""
         commission = BASE_COMMISSION

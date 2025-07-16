@@ -350,7 +350,10 @@ async def stat(message: Message, bot: Bot) -> None:
             
             # Формируем строку опыта
             if current_level < 20:  # Максимальный уровень
-                exp_text = f"⭐ Опыт: {total_exp}/{exp_for_next} (+{exp_to_next} до следующего уровня)"
+                if exp_to_next > 0:
+                    exp_text = f"⭐ Опыт: {total_exp}/{exp_for_next} (+{exp_to_next} до следующего уровня)"
+                else:
+                    exp_text = f"⭐ Опыт: {total_exp}/{exp_for_next} (уровень достигнут, получите опыт для следующего уровня!)"
             else:
                 exp_text = f"⭐ Опыт: {total_exp} (максимальный уровень)"
             
@@ -1761,7 +1764,7 @@ async def finish_burmalda_game(call: CallbackQuery, bot: Bot) -> None:
         # Начисляем бонусный опыт за победы
         if bonus_exp_earned > 0:
             logger.info(f"[finish_burmalda_game] Добавляю бонусный опыт: {bonus_exp_earned}")
-            burmalda_game.add_bonus_exp(user_id, chat_id, bonus_exp_earned)
+            await award_exp_and_check_level_up(user_id, 0, bonus_exp_earned, call.from_user.first_name, None, bot, chat_id)
         # Формируем итоговое сообщение
         if wins == 0:
             result_text = "😔 К сожалению, вы не выиграли ни одной попытки..."
