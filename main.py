@@ -48,7 +48,7 @@ async def auto_task(bot: Bot):
         try:
             moscow_tz = pytz.timezone('Europe/Moscow')
             now = datetime.now(moscow_tz)
-            target_time = time(18, 00)  # 18:00
+            target_time = time(19, 00)  # 19:00
             
             # Если текущее время больше 18:00, ждем до следующего дня
             if now.time() > target_time:

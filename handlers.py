@@ -1861,7 +1861,9 @@ async def handle_all_messages(message: Message, bot: Bot) -> None:
         # Пропускаем сообщения от ботов и каналов
         if message.from_user and message.from_user.is_bot:
             return
-        if message.chat.type == "channel":
+        elif message.chat.type == "channel":
+            return
+        elif message.from_user.username == "Telegram":
             return
 
         user_id = message.from_user.id
