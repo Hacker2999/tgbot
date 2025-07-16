@@ -2322,7 +2322,7 @@ async def top_callback_handler(call: CallbackQuery, bot: Bot) -> None:
     elif call.data == "top_time":
         # Топ по времени в чате (по дате регистрации)
         from model import User_listModel
-        from datetime import datetime
+        from datetime import datetime, timezone
         query = (
             User_listModel
             .select()
@@ -2330,7 +2330,7 @@ async def top_callback_handler(call: CallbackQuery, bot: Bot) -> None:
             .order_by(User_listModel.created_at.asc())
             .limit(10)
         )
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         lines = []
         for idx, user in enumerate(query, 1):
             try:
@@ -2338,7 +2338,10 @@ async def top_callback_handler(call: CallbackQuery, bot: Bot) -> None:
                 name = member.user.username if member.user.username is not None else member.user.first_name
             except Exception:
                 name = f"ID {user.user_id}"
-            time_withus = now - user.created_at
+            created_at = user.created_at
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+            time_withus = now - created_at
             days = time_withus.days
             hours = time_withus.seconds // 3600
             lines.append(f"{idx}. <b>{name}</b> — <b>{days} дн., {hours} ч.</b> в чате")
