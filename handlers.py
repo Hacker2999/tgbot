@@ -646,34 +646,23 @@ async def measure_size(message: Message) -> None:
         logger.error(f"Ошибка в measure_size: {e}")
         await message.reply("Ошибка при измерении размера.")
 
-@router.message(Command("size_top"))
-async def size_top(message: Message, bot: Bot) -> None:
-    # Отсеиваем привязанный канал и сообщения бота
-    if message.chat.type == "channel" or (message.from_user and message.from_user.is_bot):
-        return
-    today = datetime.now().date()
-    query = (
-        SizeModel
-        .select(SizeModel.user_id, SizeModel.size)
-        .where(SizeModel.date == today)
-        .order_by(SizeModel.size.desc())
+@router.message(Command("top"))
+async def top_menu(message: Message, bot: Bot) -> None:
+    """
+    Показывает меню выбора топов с инлайн-кнопками.
+    """
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+    builder = InlineKeyboardBuilder()
+    builder.button(text="1. По размеру пениса", callback_data="top_size")
+    builder.button(text="2. По кол-ву сообщений", callback_data="top_messages")
+    builder.button(text="3. По уровню", callback_data="top_level")
+    builder.button(text="4. По времени в чате", callback_data="top_time")
+    builder.adjust(1)
+    await message.reply(
+        "<b>Выберите вариант топа:</b>",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML"
     )
-    results = list(query)
-    if not results:
-        await message.reply("Сегодня ещё никто не измерял размер!")
-        return
-    medals = ["🥇", "🥈", "🥉"]
-    lines = []
-    for idx, row in enumerate(results, 1):
-        try:
-            user = await bot.get_chat_member(message.chat.id, row.user_id)
-            name = user.user.username if user.user.username is not None else user.user.first_name
-        except Exception:
-            name = f"ID {row.user_id}"
-        medal = medals[idx-1] if idx <= 3 else f"  {idx}."
-        lines.append(f"{medal} <b>{name}</b> — <b>{row.size} см</b>")
-    text = "<b>🏆 Турнирная таблица размеров за сегодня:</b>\n\n" + "\n".join(lines)
-    await message.reply(text, parse_mode="HTML")
 
 @router.message(Command("anekdot"))
 async def i_want_anekdot(message: Message) -> None:
@@ -731,33 +720,35 @@ async def help_command(message: Message) -> None:
     text = (
         "<b>🤖 Добро пожаловать! Вот что я умею:</b>\n\n"
         "<b>👤 Пользовательские команды:</b>\n"
-        "<b>/stat</b> — Ваша статистика в чате: сколько сообщений, сколько вы с нами\n"
-        "<b>/burmalda</b> — 🎮 <i>Игровая система с кредитами и магазином!</i>\n"
+        "<b>/stat</b> — Ваша статистика в чате\n"
+        "<b>/burmalda</b> — 🎮 Игровая система с кредитами и магазином\n"
         "<b>/size</b> — Узнай размер своего бубуя (рандом + никнейм)\n"
-        "<b>/size_top</b> — Турнирная таблица размеров за сегодня\n"
+        "<b>/top</b> — Турнирная таблица (размер, сообщения, уровень, время)\n"
         "<b>/anekdot</b> — Получить свежий анекдот (лимит: 3 в день)\n"
         "<b>/rules</b> — Показать правила чата\n"
-        "<b>/links</b> — Список полезных ссылок с кнопками\n"
+        "<b>/links</b> — Список полезных ссылок\n"
+        "<b>/action_list</b> — Список RP-действий в чате\n"
         "<b>/help</b> — Это меню\n"
         "\n"
         "<b>🛠️ Админ-команды:</b>\n"
         "<b>/set_welcome</b> — Изменить приветствие (ответом на сообщение или текстом)\n"
         "<b>/set_bye</b> — Изменить прощание (ответом на сообщение или текстом)\n"
-        "<b>/add_button</b> — Добавить кнопку в /links. Пример: <code>/add_button Название - https://ссылка;</code>\n"
-        "<b>/del_button</b> — Удалить кнопку из /links. Пример: <code>/del_button Название;</code>\n"
+        "<b>/add_button</b> — Добавить кнопку в /links. Пример: <code>/add_button Название - https://ссылка</code>\n"
+        "<b>/del_button</b> — Удалить кнопку из /links. Пример: <code>/del_button Название</code>\n"
         "<b>/add_rules</b> — Добавить или обновить правила чата (ответом на сообщение с текстом)\n"
         "<b>/m</b> — Мут пользователя (ответом на сообщение, можно указать срок: <code>/m 10m</code>)\n"
         "<b>/b</b> — Бан пользователя (ответом на сообщение, можно указать срок: <code>/b 1d</code>)\n"
-        "\n"
-        "<b>🎭 RP-действия:</b>\n"
+        "<b>/warn</b> — Выдать предупреждение пользователю (ответом на сообщение)\n"
+        "<b>/unwarn</b> — Снять все предупреждения у пользователя (ответом на сообщение)\n"
         "<b>/add_action</b> — Добавить новое RP-действие. Пример: <code>/add_action \"обнять\" \"обнял\"</code>\n"
-        "<b>/action_list</b> — Показать список всех RP-действий в чате\n"
         "<b>/del_action</b> — Удалить RP-действие. Пример: <code>/del_action \"обнять\"</code>\n"
+        "<b>/tr_otval</b> — Перевести отвальчики другому пользователю (ответом на сообщение: <code>/tr_otval 100</code>)\n"
+        "<b>/killchatall</b> — Полное уничтожение чата (секретная команда)\n"
         "\n"
         "<b>🎮 Burmalda - Игровая система:</b>\n"
         "• Ежедневно получайте 100 отвальчиков\n"
         "• Играйте в рулетку, слоты и блэкджек за 30 отвальчиков\n"
-        "• Каждая игра включает 3 попытки (кроме блэкджека - 1 попытка)\n"
+        "• Каждая игра включает 3 попытки (кроме блэкджека — 1 попытка)\n"
         "• Зарабатывайте отвальчики и бонусный опыт за победы:\n"
         "  - 1 победа: 15 отвальчиков + 30 бонусного опыта\n"
         "  - 2 победы: 35 отвальчиков + 60 бонусного опыта\n"
@@ -2252,4 +2243,106 @@ async def process_rp_action(message: Message, bot: Bot) -> None:
             
     except Exception as e:
         logger.error(f"Ошибка при обработке RP-действия: {e}")
+
+@router.callback_query(lambda c: c.data in ["top_size", "top_messages", "top_level", "top_time"])
+async def top_callback_handler(call: CallbackQuery, bot: Bot) -> None:
+    chat_id = call.message.chat.id
+    if call.data == "top_size":
+        # Топ по размеру пениса (за сегодня)
+        from model import SizeModel
+        from datetime import datetime
+        today = datetime.now().date()
+        query = (
+            SizeModel
+            .select(SizeModel.user_id, SizeModel.size)
+            .where(SizeModel.chat_id == chat_id, SizeModel.date == today)
+            .order_by(SizeModel.size.desc())
+        )
+        results = list(query)
+        if not results:
+            await call.answer("Сегодня ещё никто не измерял размер!", show_alert=True)
+            return
+        medals = ["🥇", "🥈", "🥉"]
+        lines = []
+        for idx, row in enumerate(results, 1):
+            try:
+                user = await bot.get_chat_member(chat_id, row.user_id)
+                name = user.user.username if user.user.username is not None else user.user.first_name
+            except Exception:
+                name = f"ID {row.user_id}"
+            medal = medals[idx-1] if idx <= 3 else f"  {idx}."
+            lines.append(f"{medal} <b>{name}</b> — <b>{row.size} см</b>")
+        text = "<b>🏆 Турнирная таблица размеров за сегодня:</b>\n\n" + "\n".join(lines)
+        await call.message.edit_text(text, parse_mode="HTML")
+        await call.answer()
+    elif call.data == "top_messages":
+        # Топ по количеству сообщений
+        from model import User_listModel
+        query = (
+            User_listModel
+            .select()
+            .where(User_listModel.chat_id == chat_id)
+            .order_by(User_listModel.message_count.desc())
+            .limit(10)
+        )
+        lines = []
+        for idx, user in enumerate(query, 1):
+            try:
+                member = await bot.get_chat_member(chat_id, user.user_id)
+                name = member.user.username if member.user.username is not None else member.user.first_name
+            except Exception:
+                name = f"ID {user.user_id}"
+            lines.append(f"{idx}. <b>{name}</b> — <b>{user.message_count}</b> сообщений")
+        text = "<b>🏆 Топ-10 по количеству сообщений:</b>\n\n" + "\n".join(lines)
+        await call.message.edit_text(text, parse_mode="HTML")
+        await call.answer()
+    elif call.data == "top_level":
+        # Топ по уровню
+        from model import User_listModel
+        from utils import get_user_rank
+        query = (
+            User_listModel
+            .select()
+            .where(User_listModel.chat_id == chat_id)
+            .order_by(User_listModel.rank.desc(), (User_listModel.level_exp + User_listModel.bonus_exp).desc())
+            .limit(10)
+        )
+        lines = []
+        for idx, user in enumerate(query, 1):
+            try:
+                member = await bot.get_chat_member(chat_id, user.user_id)
+                name = member.user.username if member.user.username is not None else member.user.first_name
+            except Exception:
+                name = f"ID {user.user_id}"
+            rank_str = get_user_rank(user.rank)
+            lines.append(f"{idx}. <b>{name}</b> — <b>{user.rank}</b> уровень ({rank_str})")
+        text = "<b>🏆 Топ-10 по уровню:</b>\n\n" + "\n".join(lines)
+        await call.message.edit_text(text, parse_mode="HTML")
+        await call.answer()
+    elif call.data == "top_time":
+        # Топ по времени в чате (по дате регистрации)
+        from model import User_listModel
+        from datetime import datetime
+        query = (
+            User_listModel
+            .select()
+            .where(User_listModel.chat_id == chat_id)
+            .order_by(User_listModel.created_at.asc())
+            .limit(10)
+        )
+        now = datetime.now()
+        lines = []
+        for idx, user in enumerate(query, 1):
+            try:
+                member = await bot.get_chat_member(chat_id, user.user_id)
+                name = member.user.username if member.user.username is not None else member.user.first_name
+            except Exception:
+                name = f"ID {user.user_id}"
+            time_withus = now - user.created_at
+            days = time_withus.days
+            hours = time_withus.seconds // 3600
+            lines.append(f"{idx}. <b>{name}</b> — <b>{days} дн., {hours} ч.</b> в чате")
+        text = "<b>🏆 Топ-10 по времени в чате:</b>\n\n" + "\n".join(lines)
+        await call.message.edit_text(text, parse_mode="HTML")
+        await call.answer()
 
