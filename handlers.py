@@ -609,10 +609,14 @@ async def measure_size(message: Message) -> None:
         q = (
             SizeModel
             .select(SizeModel.size, SizeModel.date)
-            .where(SizeModel.chat_id == message.chat.id, SizeModel.user_id == user_id)
+            .where(
+                SizeModel.chat_id == message.chat.id, 
+                SizeModel.user_id == user_id,
+                SizeModel.date == today
+            )
             .first()
         )
-        if q and q.date == today:
+        if q:
             size = q.size
         else:
             # Удача: хэш от user_id и даты, нормализуем в диапазон 0..1
@@ -753,7 +757,7 @@ async def help_command(message: Message) -> None:
         "  - 1 победа: 15 отвальчиков + 30 бонусного опыта\n"
         "  - 2 победы: 35 отвальчиков + 60 бонусного опыта\n"
         "  - 3 победы: 60 отвальчиков + 90 бонусного опыта\n"
-        "• Блэкджек: победа = +60 отвальчиков, проигрыш = -30 отвальчиков\n"
+        "• Блэкджек: победа = +60 отвальчиков, проигрыш = -30 отвальчиков, ничья = возврат 30 отвальчиков\n"
         "• Покупайте товары в магазине: снятие предупреждений, обмен отвальчиков на опыт\n"
         "\n"
         "<b>ℹ️ Примечания:</b>\n"
@@ -1649,6 +1653,7 @@ async def start_burmalda_game(call: CallbackQuery, bot: Bot, user_id: int, game_
             attempts_info += f"\n🏆 Победы: {current_wins}"
             attempts_info += f"\n💰 Выигрыш: {current_credits_earned} отвальчиков"
             
+            
             if game_state["attempts"] < GAME_ATTEMPTS:
                 # Добавляем кнопку для следующей попытки
                 builder.button(text="🎲 Следующая попытка", callback_data=f"burmalda_game_roulette_{user_id}")
@@ -2070,7 +2075,7 @@ async def show_blackjack_final(call: CallbackQuery, bot: Bot, user_id: int, play
     elif player_score == dealer_score:
         result = "🤝 Ничья!"
         won = False
-        credits_change = 0  # Ничья - ничего не теряем и не получаем
+        credits_change = 30  # Возвращаем 30 отвальчиков (которые были списаны при начале игры)
     else:
         result = "❌ Проигрыш."
         won = False
@@ -2087,7 +2092,10 @@ async def show_blackjack_final(call: CallbackQuery, bot: Bot, user_id: int, play
     # Формируем сообщение с информацией о выигрыше
     credits_text = ""
     if credits_change > 0:
-        credits_text = f"\n💰 Выигрыш: +{credits_change} отвальчиков"
+        if player_score == dealer_score:
+            credits_text = f"\n🤝 Ничья: возврат {credits_change} отвальчиков"
+        else:
+            credits_text = f"\n💰 Выигрыш: +{credits_change} отвальчиков"
     elif credits_change < 0:
         credits_text = f"\n💸 Проигрыш: {credits_change} отвальчиков"
     else:
