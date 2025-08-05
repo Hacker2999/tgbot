@@ -419,7 +419,7 @@ SELECT
     is_nullable
 FROM information_schema.columns 
 WHERE table_schema = 'public' 
-AND table_name IN ('user_list', 'chat_list', 'anek_list', 'size_list', 'button_list', 'text', 'ban_list', 'credits_history')
+AND table_name IN ('user_list', 'chat_list', 'anek_list', 'size_list', 'button_list', 'text', 'ban_list', 'credits_history', 'transfer_history')
 ORDER BY table_name, ordinal_position;
 
 -- Выводим информацию о созданных индексах
@@ -429,5 +429,23 @@ SELECT
     indexdef
 FROM pg_indexes 
 WHERE schemaname = 'public' 
-AND tablename IN ('user_list', 'chat_list', 'anek_list', 'size_list', 'button_list', 'text', 'ban_list', 'credits_history')
-ORDER BY tablename, indexname; 
+AND tablename IN ('user_list', 'chat_list', 'anek_list', 'size_list', 'button_list', 'text', 'ban_list', 'credits_history', 'transfer_history')
+ORDER BY tablename, indexname;
+
+-- Создание таблицы для истории переводов отвальчиков
+CREATE TABLE IF NOT EXISTS transfer_history (
+    id BIGSERIAL PRIMARY KEY,
+    chat_id BIGINT NOT NULL,
+    from_user_id BIGINT NOT NULL,
+    to_user_id BIGINT NOT NULL,
+    amount BIGINT NOT NULL,
+    transfer_date DATE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Индексы для таблицы transfer_history
+CREATE INDEX IF NOT EXISTS idx_transfer_history_chat_id ON transfer_history(chat_id);
+CREATE INDEX IF NOT EXISTS idx_transfer_history_from_user_id ON transfer_history(from_user_id);
+CREATE INDEX IF NOT EXISTS idx_transfer_history_to_user_id ON transfer_history(to_user_id);
+CREATE INDEX IF NOT EXISTS idx_transfer_history_transfer_date ON transfer_history(transfer_date);
+CREATE INDEX IF NOT EXISTS idx_transfer_history_chat_from_date ON transfer_history(chat_id, from_user_id, transfer_date); 

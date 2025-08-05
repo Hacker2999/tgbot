@@ -15,7 +15,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from peewee import fn, DatabaseError
 
 from baneks_api import fetch_random_joke
-from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel, RpActionModel
+from model import TextModel, AnekModel, User_listModel, Chat_listModel, Button_listModel, SizeModel, RpActionModel, TransferHistoryModel
 from utils import quota_check, calculate_level, calculate_exp_for_level, calculate_messages_for_level, get_user_rank, check_visit_streak, is_admin, award_exp_and_check_level_up
 from config import RULES, API_TOKEN, SPAM_LIMIT, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, KILL_CHAT_PASSWORD
 from burmalda import burmalda_game, GAME_COST, ATTEMPT_REWARDS, WARN_REMOVAL_COST, VICTORY_BONUS_EXP, GAME_ATTEMPTS
@@ -746,7 +746,7 @@ async def help_command(message: Message) -> None:
         "<b>/unwarn</b> — Снять все предупреждения у пользователя (ответом на сообщение)\n"
         "<b>/add_action</b> — Добавить новое RP-действие. Пример: <code>/add_action \"обнять\" \"обнял\"</code>\n"
         "<b>/del_action</b> — Удалить RP-действие. Пример: <code>/del_action \"обнять\"</code>\n"
-        "<b>/tr_otval</b> — Перевести отвальчики другому пользователю (ответом на сообщение: <code>/tr_otval 100</code>)\n"
+        "<b>/tr_otval</b> — Перевести отвальчики другому пользователю (ответом на сообщение: <code>/tr_otval 100</code>, лимит: 100 отвальчиков в день)\n"
         "<b>/killchatall</b> — Полное уничтожение чата (секретная команда)\n"
         "\n"
         "<b>🎮 Burmalda - Игровая система:</b>\n"
@@ -1835,6 +1835,26 @@ async def transfer_otvalchiki_command(message: Message, bot: Bot) -> None:
         if to_user_id == from_user_id:
             await message.reply("❌ Нельзя переводить отвальчики самому себе")
             return
+        
+        # Проверяем дневной лимит переводов (максимум 100 отвальчиков в день)
+        today = datetime.now().date()
+        daily_transfers = (
+            TransferHistoryModel
+            .select(fn.SUM(TransferHistoryModel.amount))
+            .where(
+                TransferHistoryModel.chat_id == message.chat.id,
+                TransferHistoryModel.from_user_id == from_user_id,
+                TransferHistoryModel.transfer_date == today
+            )
+            .scalar()
+        )
+        daily_transfers = daily_transfers or 0
+        
+        if daily_transfers + amount > 100:
+            remaining = 100 - daily_transfers
+            await message.reply(f"❌ Превышен дневной лимит переводов! Вы уже перевели {daily_transfers} отвальчиков сегодня. Можете перевести еще максимум {remaining} отвальчиков.")
+            return
+        
         # Проверяем баланс
         if not burmalda_game.can_transfer_points(from_user_id, message.chat.id, amount):
             await message.reply("❌ Недостаточно отвальчиков для перевода")
@@ -1843,6 +1863,19 @@ async def transfer_otvalchiki_command(message: Message, bot: Bot) -> None:
         if not burmalda_game.transfer_points(from_user_id, to_user_id, message.chat.id, amount):
             await message.reply("❌ Ошибка при переводе")
             return
+        
+        # Записываем перевод в историю
+        (
+            TransferHistoryModel
+            .insert({
+                TransferHistoryModel.chat_id: message.chat.id,
+                TransferHistoryModel.from_user_id: from_user_id,
+                TransferHistoryModel.to_user_id: to_user_id,
+                TransferHistoryModel.amount: amount,
+                TransferHistoryModel.transfer_date: today
+            })
+        ).execute()
+        
         # Начисляем опыт отправителю (опционально)
         await award_exp_and_check_level_up(from_user_id, amount, 0, message.from_user.first_name, message, bot, message.chat.id)
         to_name = message.reply_to_message.from_user.username or message.reply_to_message.from_user.first_name

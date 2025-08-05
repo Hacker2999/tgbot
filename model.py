@@ -118,3 +118,16 @@ class RpActionModel(BaseModel):
         indexes = (
             (('chat_id', 'trigger_word'), True),  # Уникальный индекс для чата + триггер
         )
+
+class TransferHistoryModel(BaseModel):
+    """История переводов отвальчиков для отслеживания дневных лимитов"""
+    id = BigAutoField(primary_key=True)
+    chat_id = BigIntegerField(null=False)  # ID чата, где произошел перевод
+    from_user_id = BigIntegerField(null=False)  # ID отправителя
+    to_user_id = BigIntegerField(null=False)  # ID получателя
+    amount = BigIntegerField(null=False)  # Количество переведенных отвальчиков
+    transfer_date = DateField(null=False)  # Дата перевода
+    created_at = TimestampField(constraints=[SQL('DEFAULT now()')])
+
+    class Meta:
+        table_name = 'transfer_history'
